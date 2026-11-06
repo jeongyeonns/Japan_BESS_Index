@@ -19,6 +19,7 @@ from utils.eprx_area_groups import (
     aggregate_region_data,
 )
 from utils.eprx_loader import find_eprx_files, load_all_eprx_data
+from views.daily_view import render_eprx_daily_analysis, render_jepx_daily_analysis
 from utils.eprx_periods import (
     EPRX_REFORM_DATE,
     LEGACY_PERIOD_NOTICE,
@@ -1486,7 +1487,7 @@ def render_regional_analysis(
             st.caption("낙찰량이 모집량을 초과한 시간대가 없습니다.")
 
 
-def render_jepx_market_placeholder() -> None:
+def render_jepx_market_placeholder(analysis_mode="주간 분석") -> None:
     """JEPX 원본 연결 상태와 정규화 진단만 표시합니다."""
     st.header("JEPX Day-Ahead 현물가격 및 ESS 스프레드 분석")
     with st.expander("JEPX 데이터 업데이트"):
@@ -1550,6 +1551,13 @@ def render_jepx_market_placeholder() -> None:
         return
 
     if not long_data.empty:
+        if analysis_mode == "Daily 분석":
+            render_jepx_daily_analysis(
+                long_data,
+                lambda duration, mode: calculate_jepx_spread_results(long_data, duration, mode),
+                JEPX_AREA_DISPLAY,
+            )
+            return
         tab_area, tab_weekly = st.tabs([
             "지역별 분석",
             "전국 주간 모니터링",
@@ -1772,11 +1780,16 @@ with st.container(key="market_selector_container"):
         width="stretch",
     )
 
+analysis_mode = st.radio(
+    "분석 주기", ["주간 분석", "Daily 분석"], horizontal=True,
+    key="jepx_analysis_mode" if selected_market == "JEPX 현물시장" else "eprx_analysis_mode",
+)
+
 if selected_market == "JEPX 현물시장":
-    render_jepx_market_placeholder()
+    render_jepx_market_placeholder(analysis_mode)
     st.stop()
 
-st.header("EPRX 1차 조정력 주간 모니터")
+st.header("EPRX 1차 조정력 주간 모니터" if analysis_mode == "주간 분석" else "EPRX 1차 조정력 Daily 모니터")
 
 with st.sidebar.expander("EPRX 데이터 업데이트"):
     approval_enabled = automation_approved()
@@ -1897,6 +1910,11 @@ else:
     st.warning(
         "현재 가상 샘플 데이터를 사용하고 있습니다. 실제 EPRX 거래 결과가 아닙니다."
     )
+
+if analysis_mode == "Daily 분석":
+    render_eprx_daily_analysis(data, price_units, render_hierarchical_metric_table)
+    show_eprx_source_information(data_source, data, file_summary, price_units, volume_units)
+    st.stop()
 
 week_days = data.groupby("week_start")["delivery_date"].nunique().to_dict()
 week_options = sorted(data["week_start"].drop_duplicates(), reverse=True)
