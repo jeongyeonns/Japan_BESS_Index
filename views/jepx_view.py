@@ -100,11 +100,16 @@ def _render_metric_hierarchy_table(data: pd.DataFrame) -> None:
                 f'<span class="jepx-metric-main">{escape(label[:boundary])}</span>'
                 f'<span class="jepx-metric-sub">{escape(label[boundary + 1:])}</span>'
             )
+        is_spread = label == "평균 ESS 스프레드 (엔/kWh)"
         values = "".join(
-            f'<td class="jepx-metric-value">{escape(str(row[column]))}</td>'
+            '<td class="jepx-metric-value">'
+            + (f'<strong class="jepx-spread-number">{escape(str(row[column]))}</strong>'
+               if is_spread else escape(str(row[column])))
+            + '</td>'
             for column in display.columns[1:]
         )
-        body.append(f'<tr><td class="jepx-metric-name">{label_html}</td>{values}</tr>')
+        emphasis = ' class="jepx-primary-spread"' if is_spread else ""
+        body.append(f'<tr{emphasis}><td class="jepx-metric-name">{label_html}</td>{values}</tr>')
     st.markdown(
         """
 <style>
@@ -117,6 +122,15 @@ def _render_metric_hierarchy_table(data: pd.DataFrame) -> None:
 .jepx-metric-value { text-align: right; font-variant-numeric: tabular-nums; }
 .jepx-metric-main { color: inherit; font-size: 0.95rem; font-weight: 500; }
 .jepx-metric-sub { color: #8a8f98; font-size: 0.75rem; font-weight: 400; margin-left: 0.25rem; }
+.jepx-metric-table tr.jepx-primary-spread > td {
+  background: rgba(214, 39, 40, 0.10); padding-top: 0.7rem; padding-bottom: 0.7rem;
+}
+.jepx-metric-table .jepx-primary-spread > .jepx-metric-name {
+  border-left: 4px solid rgba(214, 39, 40, 0.55); font-weight: 700;
+}
+.jepx-metric-table .jepx-primary-spread .jepx-metric-main { font-weight: 700; }
+.jepx-metric-table .jepx-primary-spread > .jepx-metric-value { font-weight: 800; font-size: 1.2em; }
+.jepx-metric-table .jepx-spread-number { font-weight: 800; font-size: inherit; }
 @media (max-width: 700px) { .jepx-metric-sub { display: block; margin-left: 0; } }
 </style>
 """
@@ -507,6 +521,12 @@ def render_jepx_weekly_monitor(long_data, spread_results_provider, area_names):
     st.markdown("### 지역별 전력가격 및 ESS 스프레드 비교" if area_label == "전체 지역 비교" else "### 선택 지역 주간 가격 및 스프레드")
     numeric_formats = {column: "{:,.2f}" for column in columns if "(엔/kWh)" in column and column != "전주 대비 변화 (엔/kWh)"}
     styled_table = table[columns].style.format(numeric_formats, na_rep="계산 불가")
+    styled_table = styled_table.set_properties(
+        subset=["평균 ESS 스프레드 (엔/kWh)"],
+        **{"font-weight": "700", "font-size": "1.1rem",
+           "background-color": "rgba(214, 39, 40, 0.06)",
+           "border-left": "3px solid rgba(214, 39, 40, 0.30)"},
+    )
     if area_label == "전체 지역 비교":
         styled_table = styled_table.highlight_max(
             subset=["평균 ESS 스프레드 (엔/kWh)", "최대 ESS 스프레드 (엔/kWh)"],
