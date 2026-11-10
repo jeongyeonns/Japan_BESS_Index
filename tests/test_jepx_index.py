@@ -60,7 +60,7 @@ class IndexTests(unittest.TestCase):
         self.assertFalse(data.empty, "Actual local JEPX data required")
         app = AppTest.from_file(str(root / "index_app.py")).run(timeout=180)
         self.assertEqual(len(app.exception), 0)
-        self.assertEqual([m.label for m in app.metric[:2]], ["TB2 Index (엔/MW/년)", "TB4 Index (엔/MW/년)"])
+        self.assertEqual([m.label for m in app.metric[:2]], ["2시간형 차익거래 Index (TB2)", "4시간형 차익거래 Index (TB4)"])
         week, area = app.selectbox[0].value, app.selectbox[1].value
         _, expected = calculate_week_index(data, week, area)
         self.assertGreater(expected["valid_days"], 0)

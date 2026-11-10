@@ -64,21 +64,40 @@ def weekly_results(data, market, area, first, last):
 
 
 def trend(history, selected_week, key):
+    is_jepx = key == "JEPX_trend"
     chart_data = history.sort_values(["series", "week"]).copy()
     # Split paths at missing weeks instead of visually bridging absent values.
     chart_data["segment"] = chart_data.groupby("series")["value"].transform(lambda s: s.isna().cumsum()).astype(str)
     line = alt.Chart(chart_data).mark_line(point=True).encode(
-        x=alt.X("week:T", title="주차 시작일 (월요일)"),
-        y=alt.Y("value:Q", title="엔/MW/년", axis=alt.Axis(format=",")),
-        color=alt.Color("series:N", title="지표", scale=alt.Scale(scheme="tableau10")), detail="segment:N",
+        x=alt.X("week:T", title="주차 시작일 (월요일)", **({"axis": alt.Axis(format="%-m/%-d")} if is_jepx else {})),
+        y=alt.Y("value:Q", title="만 엔/MW/년" if is_jepx else "엔/MW/년",
+                axis=alt.Axis(labelExpr="format(datum.value / 10000, ',.0f')") if is_jepx else alt.Axis(format=",")),
+        color=alt.Color("series:N", title="지표", scale=alt.Scale(scheme="tableau10"),
+                        **({"legend": alt.Legend(labelExpr="datum.label === 'TB2' ? '2시간형 (TB2)' : '4시간형 (TB4)'")} if is_jepx else {})), detail="segment:N",
         tooltip=[alt.Tooltip("week:T", title="시작일", format="%Y-%m-%d"),
                  alt.Tooltip("week_end:T", title="종료일", format="%Y-%m-%d"),
                  alt.Tooltip("series:N", title="지표"), alt.Tooltip("value:Q", title="엔/MW/년", format=",.2f"),
                  alt.Tooltip("valid_days:Q", title="집계 일수 / 7"),
                  alt.Tooltip("complete_days:Q", title="완전일 / 7"), alt.Tooltip("quality:N", title="완전성")])
     rule = alt.Chart(pd.DataFrame({"week": [selected_week]})).mark_rule(color="#94a3b8", strokeDash=[4, 4]).encode(x="week:T")
-    st.caption("주차별 연환산 Index · 선택 주차는 점선 · 완전성은 툴팁에서 확인")
-    st.altair_chart((line + rule).properties(height=280), width="stretch", key=key)
+    st.caption("선택 주차는 점선이며, 정확한 금액과 데이터 집계 일수는 툴팁에서 확인할 수 있습니다." if is_jepx else "주차별 연환산 Index · 선택 주차는 점선 · 완전성은 툴팁에서 확인")
+    chart = (line + rule).properties(height=280)
+    if is_jepx:
+        chart = chart.properties(title="주차별 차익거래 수익기회")
+    st.altair_chart(chart, width="stretch", key=key)
+
+
+def jepx_card(row, previous):
+    label = f"{row.series[-1]}시간형 차익거래 Index ({row.series})"
+    exact = "계산 가능한 데이터가 없습니다." if pd.isna(row.value) else f"{row.value:,.2f} 엔/MW/년"
+    st.metric(label, money(row.value), delta=change(row.value, previous), help=exact)
+    st.caption("엔/MW/년")
+    st.divider()
+    spread = "—" if pd.isna(row.average_price) else f"{row.average_price:,.2f}엔/kWh"
+    st.html(f"""<div style="display:grid;grid-template-columns:1fr auto;gap:0.5rem 1rem;font-size:0.95rem;">
+        <span>주간 평균 스프레드</span><span style="text-align:right;font-variant-numeric:tabular-nums;">{spread}</span>
+        <span>데이터 집계</span><span style="text-align:right;font-variant-numeric:tabular-nums;">{row.valid_days}/7일</span>
+        </div>""")
 
 
 def eprx_quality(data, week, area):
@@ -145,6 +164,10 @@ def main():
     for market, title in (("JEPX", "차익거래 수익기회"), ("EPRX", "1차 조정력 수익기회")):
         st.divider()
         st.subheader(f"{market} — {title}")
+        if market == "JEPX":
+            st.markdown("하루 중 고가·저가 2시간 또는 4시간의 평균 스프레드를 기준으로 한 MW당 연간 차익거래 수익기회입니다.")
+            with st.expander("JEPX 지표 설명"):
+                st.markdown("하루 중 전력가격이 가장 높은 2시간 또는 4시간과 가장 낮은 2시간 또는 4시간의 평균 스프레드를 계산합니다. 선택한 주차의 평균 스프레드가 1년간 유지된다고 가정하여 MW당 연간 수익기회로 환산한 지표입니다.")
         if market not in sources:
             st.info(f"{market} 데이터가 없습니다.")
             continue
@@ -156,6 +179,10 @@ def main():
             st.caption("전원 소재지역별 최고 낙찰가격 · 円/kW・30分 · 48코마는 24시간 참고 시나리오")
         for card, row in zip(st.columns(len(current)), current.itertuples()):
             with card.container(border=True):
+                if market == "JEPX":
+                    old = previous.loc[row.series, "value"] if row.series in previous.index else float("nan")
+                    jepx_card(row, old)
+                    continue
                 label = f"{row.series} Index (엔/MW/년)" if market == "JEPX" else f"{row.series} · {int(row.series[:-2]) // 2}시간" + (" (참고용)" if row.series == "48코마" else "")
                 old = previous.loc[row.series, "value"] if row.series in previous.index else float("nan")
                 st.metric(label, money(row.value), delta=change(row.value, old) if market == "JEPX" else None)
