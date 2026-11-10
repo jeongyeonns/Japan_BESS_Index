@@ -9,6 +9,13 @@ from utils.jepx_areas import JEPX_AREA_DISPLAY, JEPX_DETAIL_AREAS
 from utils.jepx_index import calculate_week_index
 from utils.jepx_loader import find_jepx_files, load_all_jepx_data
 from utils.eprx_loader import find_eprx_files, load_all_eprx_data
+from utils import eprx_index
+
+# A live Streamlit process can retain the module from before the legacy update.
+if not hasattr(eprx_index, "calculate_eprx_legacy_week_index"):
+    from importlib import reload
+    reload(eprx_index)
+
 from utils.eprx_index import calculate_eprx_week_index, calculate_eprx_legacy_week_index
 from utils.eprx_periods import expected_period_count, EPRX_REFORM_DATE
 
