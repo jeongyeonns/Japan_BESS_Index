@@ -31,10 +31,10 @@ def test_jepx_chart_display_units_preserve_values_and_eprx_axes():
         assert chart.layer[0].data.value.isna().sum() == history.value.isna().sum()
         trend(history, start, "EPRX_trend")
         eprx = render.call_args.args[0].to_dict()["layer"][0]["encoding"]
-        assert eprx["y"]["title"] == "엔/MW/년"
-        assert eprx["y"]["axis"] == {"format": ","}
-        assert "axis" not in eprx["x"]
-        assert "legend" not in eprx["color"]
+        assert eprx["y"]["title"] == "만 엔/MW/년"
+        assert eprx["y"]["axis"]["labelExpr"] == "format(datum.value / 10000, ',.0f')"
+        assert eprx["x"]["axis"]["format"] == "%-m/%-d"
+        assert eprx["strokeDash"]["field"] == "regime"
     pd.testing.assert_frame_equal(history, original)
 
 
@@ -70,11 +70,18 @@ def test_actual_dashboard_navigation_and_missing_week():
     assert not app.exception
     app.multiselect[0].set_value([]).run(timeout=60)
     assert not app.exception
-    # Backfilled JEPX is available; legacy EPRX remains excluded.
+    # Both JEPX and separately calculated legacy EPRX are available.
     app.selectbox[0].select(pd.Timestamp("2026-01-05")).run(timeout=60)
     assert not app.exception
     assert all(m.value != "계산 불가" for m in app.metric[:2])
-    assert all(m.value == "계산 불가" for m in app.metric[2:])
+    assert app.metric[2].value != "계산 불가"
+    assert app.metric[2].label == "6시간 기준 조정력 Index"
+    app.selectbox[0].select(pd.Timestamp("2026-03-09")).run(timeout=60)
+    assert not app.exception
+    assert app.radio[0].value == "3시간 블록"
+    app.radio[0].set_value("30분 코마").run(timeout=60)
+    assert not app.exception
+    assert app.metric[2].value != "계산 불가"
     assert app.warning
 
 
