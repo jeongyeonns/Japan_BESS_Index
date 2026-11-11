@@ -7,9 +7,11 @@ def test_fuel_figure_has_three_visible_traces_and_secondary_axis():
     jepx = pd.DataFrame({"month": pd.to_datetime(["2026-01-01", "2026-02-01"]), "tb2": [2.0, 3.0], "tb4": [3.0, 4.0]})
     fuel = pd.DataFrame({"month": pd.to_datetime(["2026-01-01", "2026-02-01"]), "japan_lng_usd_mmbtu": [10.0, 11.0], "australia_coal_usd_ton": [100.0, 101.0]})
     jkm = pd.DataFrame({"comparison_month": pd.to_datetime(["2026-01-01", "2026-02-01"]), "settlement_price_yen_mmbtu": [1500.0, 1600.0]})
-    fig = build_fuel_comparison_figure(jepx, fuel, jkm, "settlement_price_yen_mmbtu", "JKM 연동가격(JPX)", "엔/MMBtu")
+    yen = bytes.fromhex("ec9584").decode()
+    label = bytes.fromhex("c5f0b3d9ac00aca9").decode()
+    fig = build_fuel_comparison_figure(jepx, fuel, jkm, "settlement_price_yen_mmbtu", f"JKM {label}(JPX)", f"{yen}/MMBtu")
     assert len(fig.data) == 3
-    assert [trace.name for trace in fig.data] == ["JEPX TB2 (엔/kWh)", "JEPX TB4 (엔/kWh)", "JKM 연동가격(JPX) (엔/MMBtu)"]
+    assert [trace.name for trace in fig.data] == [f"JEPX TB2 ({yen}/kWh)", f"JEPX TB4 ({yen}/kWh)", f"JKM {label}(JPX) ({yen}/MMBtu)"]
     assert list(fig.data[2].y) == [1500.0, 1600.0]
     assert fig.data[2].yaxis == "y2"
     assert all(trace.showlegend is not False for trace in fig.data)
