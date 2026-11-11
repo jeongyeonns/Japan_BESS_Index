@@ -74,7 +74,7 @@ def test_actual_dashboard_navigation_and_missing_week():
     assert not any(e.label in ("JEPX 지표 설명", "EPRX 지표 설명") for e in app.expander)
     assert not any(c.value == "엔/MW/년" for c in app.caption)
     assert all(m.value == "계산 불가" or m.value.endswith("만 엔/MW/year") for m in app.metric)
-    assert len(app.get("vega_lite_chart")) == 5
+    assert len(app.get("vega_lite_chart")) == 4
     for area in ("Tokyo", "Chubu", "Kyushu"):
         app.selectbox[1].select(area)
         app.selectbox[0].select(pd.Timestamp("2026-11-02")).run(timeout=60)

@@ -18,3 +18,10 @@ def test_monthly_jepx_spreads_average():
     finally:
         index_app.weekly_results = original
     assert out.iloc[0].tb2 == 3 and out.iloc[0].tb4 == 4
+
+def test_fuel_choice_has_distinct_unit_and_no_relative_series():
+    import index_app
+    assert index_app.fuel_comparison_charts.__name__ == "fuel_comparison_charts"
+    source = open("index_app.py", encoding="utf-8").read()
+    assert "상대적 변화 추이" not in source
+    assert "USD/MMBtu" in source and "USD/톤" in source

@@ -61,23 +61,25 @@ def fuel_comparison_charts(jepx_monthly, fuel_prices):
     st.markdown("#### JEPX 스프레드와 발전연료 가격 비교")
     latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "없음"
     st.caption(f"JEPX는 지역별 월평균 스프레드, 연료가격은 World Bank Pink Sheet 월별 가격입니다. 저장된 최신 연료가격: {latest}. JKM 공개 시계열은 확인되지 않아 연결하지 않았습니다.")
+    fuel_options = {
+        "일본 LNG 수입가격": ("japan_lng_usd_mmbtu", "일본 LNG 수입가격 (USD/MMBtu)", "USD/MMBtu"),
+        "호주 발전용 석탄가격": ("australia_coal_usd_ton", "호주 발전용 석탄가격 (USD/톤)", "USD/톤"),
+    }
+    selected_name = st.selectbox("비교할 발전연료", list(fuel_options), key="fuel_comparison_choice")
+    fuel_column, fuel_label, fuel_unit = fuel_options[selected_name]
     jepx = merged.melt("month", ["tb2", "tb4"], var_name="series", value_name="value").dropna()
     jepx["series"] = jepx["series"].map({"tb2": "JEPX TB2 (엔/kWh)", "tb4": "JEPX TB4 (엔/kWh)"})
-    gas = merged.melt("month", ["jkm_usd_mmbtu", "japan_lng_usd_mmbtu"], var_name="series", value_name="value").dropna()
-    gas["series"] = gas["series"].map({"jkm_usd_mmbtu": "JKM (USD/MMBtu)", "japan_lng_usd_mmbtu": "일본 LNG 수입가격 (USD/MMBtu)"})
-    coal = merged.melt("month", ["australia_coal_usd_ton"], var_name="series", value_name="value").dropna()
-    coal["series"] = "호주 발전용 석탄 (USD/톤)"
-    base = alt.Chart(pd.DataFrame({"month": merged.month.dropna().unique()})).encode(x=alt.X("month:T", title="월", axis=alt.Axis(format="%Y-%m")))
-    left = alt.Chart(jepx).mark_line(point=True).encode(x="month:T", y=alt.Y("value:Q", title="JEPX (엔/kWh)"), color=alt.Color("series:N", title="지표"), tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("value:Q", title="엔/kWh", format=",.2f"), "series:N"])
-    right_data = pd.concat([gas, coal], ignore_index=True)
-    right = alt.Chart(right_data).mark_line(point=True, strokeDash=[5, 3]).encode(x="month:T", y=alt.Y("value:Q", title="연료가격 (USD)", axis=alt.Axis(orient="right")), color=alt.Color("series:N", title="연료 지표"), tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("value:Q", title="USD", format=",.2f"), "series:N"])
-    st.altair_chart((left + right).resolve_scale(y="independent").properties(height=300), width="stretch")
-    relative = pd.concat([jepx.rename(columns={"value": "value"}), gas, coal], ignore_index=True)
-    relative["value"] = relative.groupby("series")["value"].transform(lambda s: s / s.dropna().iloc[0] * 100 if not s.dropna().empty else s)
-    relative = relative.dropna()
-    chart = alt.Chart(relative).mark_line(point=True).encode(x=alt.X("month:T", title="월", axis=alt.Axis(format="%Y-%m")), y=alt.Y("value:Q", title="2026년 1월 = 100", axis=alt.Axis(format=",.0f")), color=alt.Color("series:N", title="지표"), tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("value:Q", title="상대지수", format=",.1f"), "series:N"])
-    st.markdown("#### 상대적 변화 추이 (2026년 1월 = 100)")
-    st.altair_chart(chart.properties(height=300), width="stretch")
+    fuel = merged[["month", fuel_column]].rename(columns={fuel_column: "value"}).dropna()
+    fuel["series"] = fuel_label
+    month_axis = alt.X("month:T", title="월", axis=alt.Axis(format="%Y-%m", tickCount="month"))
+    left = alt.Chart(jepx).mark_line(point=True).encode(
+        x=month_axis, y=alt.Y("value:Q", title="JEPX 스프레드 (엔/kWh)"),
+        color=alt.Color("series:N", title="JEPX", scale=alt.Scale(range=["#537a96", "#a66a36"])),
+        tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("series:N", title="지표"), alt.Tooltip("value:Q", title="엔/kWh", format=",.2f")])
+    right = alt.Chart(fuel).mark_line(point=True, color="#5b8c5a", strokeDash=[5, 3]).encode(
+        x=month_axis, y=alt.Y("value:Q", title=f"{fuel_label} ({fuel_unit})", axis=alt.Axis(orient="right")),
+        tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("series:N", title="연료"), alt.Tooltip("value:Q", title=fuel_unit, format=",.2f")])
+    st.altair_chart((left + right).resolve_scale(y="independent").properties(height=320, title="월평균 JEPX 스프레드와 발전연료 가격"), width="stretch")
 
 
 def money(value):
