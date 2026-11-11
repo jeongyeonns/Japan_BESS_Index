@@ -75,38 +75,38 @@ def build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, fuel_col
         merged = merged.merge(jkm, on="month", how="outer")
     common = merged.loc[(merged.month >= pd.Timestamp("2026-01-01")) & merged.tb2.notna() & merged.tb4.notna() & merged[fuel_column].notna()].sort_values("month")
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-    yen = bytes.fromhex("ec9584").decode()
+    yen = "엔"
     fig.add_trace(go.Scatter(x=common.month, y=common.tb2, name="JEPX TB2 (" + yen + "/kWh)", mode="lines+markers", line={"color": "#537a96"}), secondary_y=False)
     fig.add_trace(go.Scatter(x=common.month, y=common.tb4, name="JEPX TB4 (" + yen + "/kWh)", mode="lines+markers", line={"color": "#a66a36"}), secondary_y=False)
     fig.add_trace(go.Scatter(x=common.month, y=common[fuel_column], name=f"{fuel_label} ({fuel_unit})", mode="lines+markers", line={"color": "#5b8c5a", "dash": "dot"}), secondary_y=True)
     fig.update_layout(height=280, margin={"l": 65, "r": 80, "t": 20, "b": 45}, legend={"orientation": "h", "y": 1.12}, hovermode="x unified")
-    fig.update_xaxes(title_text="?", tickformat="%Y-%m", dtick="M1")
-    fig.update_yaxes(title_text="JEPX ???? (?/kWh)", secondary_y=False, rangemode="tozero")
-    fig.update_yaxes(title_text="{fuel_unit}", secondary_y=True, rangemode="tozero")
+    fig.update_xaxes(title_text="월", tickformat="%Y-%m", dtick="M1")
+    fig.update_yaxes(title_text="JEPX 스프레드 (엔/kWh)", secondary_y=False, rangemode="tozero")
+    fig.update_yaxes(title_text=fuel_unit, secondary_y=True, rangemode="tozero")
     return fig
 
 
 def fuel_comparison_charts(jepx_monthly, fuel_prices, jkm_prices=None):
-    st.markdown("#### " + "JEPX ????? ???? ?? ??")
-    st.caption("JEPX? ??? ????? LNG??? ??? ??? ?????.")
-    latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "??"
-    jkm_latest = jkm_prices.comparison_month.max().strftime("%Y-%m") if jkm_prices is not None and not jkm_prices.empty else "??"
-    st.caption(f"World Bank Pink Sheet ?? ???: {latest} ? JPX JKM ?? ???? ???: {jkm_latest}")
+    st.markdown("#### JEPX 스프레드와 발전연료 가격 비교")
+    st.caption("JEPX의 월평균 스프레드와 LNG·석탄 가격의 추이를 비교합니다.")
+    latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "없음"
+    jkm_latest = jkm_prices.comparison_month.max().strftime("%Y-%m") if jkm_prices is not None and not jkm_prices.empty else "없음"
+    st.caption(f"World Bank Pink Sheet 최신 갱신월: {latest} · JPX JKM 최신 평가기간 종료월: {jkm_latest}")
     charts = [
-        ("JKM ????(JPX)", "settlement_price_yen_mmbtu", "?/MMBtu"),
-        ("?? LNG ????", "japan_lng_usd_mmbtu", "USD/MMBtu"),
-        ("?? ??? ????", "australia_coal_usd_ton", "USD/?"),
+        ("JKM 연동가격(JPX)", "settlement_price_yen_mmbtu", "엔/MMBtu"),
+        ("일본 LNG 수입가격", "japan_lng_usd_mmbtu", "USD/MMBtu"),
+        ("호주 발전용 석탄가격", "australia_coal_usd_ton", "USD/톤"),
     ]
     for label, column, unit in charts:
         fig = build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, column, label, unit)
-        st.markdown(f"##### " + "JEPX ????? " + "{label}")
+        st.markdown(f"##### JEPX 스프레드와 {label}")
         st.plotly_chart(fig, use_container_width=True)
         if column == "settlement_price_yen_mmbtu":
-            st.caption("??: [JEPX ???? ??](https://www.jepx.jp/electricpower/market-data/spot/) / [JPX LNG (Platts JKM) ?? ??????](https://www.jpx.co.jp/markets/derivatives/special-quotation/)\n\n? JKM? ???? ??? ?? JPX? JKM ?? ????????, ???? ???? ???? ?????.")
+            st.caption("출처: [JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/) / [JPX LNG (Platts JKM) 선물 최종정산가격](https://www.jpx.co.jp/markets/derivatives/special-quotation/)\n\n※ JKM은 현물가격 자체가 아닌 JPX의 JKM 연동 최종정산가격이며, 평가기간 종료월을 기준으로 표시합니다.")
         elif column == "japan_lng_usd_mmbtu":
-            st.caption("??: [JEPX ???? ??](https://www.jepx.jp/electricpower/market-data/spot/) / [World Bank Pink Sheet (?? LNG ????)](https://www.worldbank.org/en/research/commodity-markets)")
+            st.caption("출처: [JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/) / [World Bank Pink Sheet (일본 LNG 수입가격)](https://www.worldbank.org/en/research/commodity-markets)")
         else:
-            st.caption("??: [JEPX ???? ??](https://www.jepx.jp/electricpower/market-data/spot/) / [World Bank Pink Sheet (?? ??? ????)](https://www.worldbank.org/en/research/commodity-markets)")
+            st.caption("출처: [JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/) / [World Bank Pink Sheet (호주 발전용 석탄가격)](https://www.worldbank.org/en/research/commodity-markets)")
 
 def money(value):
     return "계산 불가" if pd.isna(value) else f"{value / 10000:,.1f}만 엔/MW/year"
