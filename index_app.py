@@ -215,77 +215,79 @@ def main():
         return
     area = controls[1].selectbox("분석 지역", areas, format_func=lambda a: JEPX_AREA_DISPLAY[a])
     st.caption(f"{JEPX_AREA_DISPLAY[area]} | {week:%Y-%m-%d} (월) ~ {week + pd.Timedelta(days=6):%Y-%m-%d} (일)")
-    for market, title in (("JEPX", "차익거래 수익기회"), ("EPRX", "조정력 수익기회")):
-        st.divider()
-        st.subheader(f"{market} — {title}")
-        if market == "JEPX":
-            with st.container(key="jepx_explanation"):
-                st.markdown("하루 중 전력가격이 가장 높은 2시간 또는 4시간과 가장 낮은 2시간 또는 4시간의 평균 스프레드를 구하고, 이를 주간 평균으로 계산합니다.")
-                st.markdown("**산식**  \n주간 평균 스프레드 × 1,000kW × 거래시간(2H/4H) × 365일")
-                st.markdown("**ex)** 2시간형 평균 스프레드 10엔/kWh → 730만 엔/MW/year")
-        else:
-            with st.container(key="eprx_explanation"):
-                st.markdown("하루 중 최고 낙찰가격이 높은 시간대부터 6·12·18·24시간을 선택하고, 해당 시간대에 모두 낙찰된다고 가정합니다.")
-                st.markdown("**산식**  \n일별 상위 N개 코마의 최고 낙찰가격 합계 × 1,000kW → 주간 일평균 × 365일")
-                st.markdown("**ex)** 낙찰가격 5엔/kW·30분, 하루 12코마(6시간) → 2,190만 엔/MW/year")
-                with st.container(key="eprx_notes"):
-                    st.caption("※ 최고 낙찰가격 기준의 이론적 수익기회로, 실제 평균 낙찰수익과는 차이가 있습니다.")
-                    st.caption("※ 2026년 3월 14일 이전에는 3시간 블록 기준의 별도 산식을 적용합니다.")
-        if market not in sources:
-            st.info(f"{market} 데이터가 없습니다.")
-            continue
-        data = sources[market]
-        history, daily = weekly_results(data, market, area, first, last)
-        current = history.loc[history.week.eq(week)]
-        if market == "EPRX":
-            regimes = current.regime.unique().tolist()
-            regime = st.radio("해당 주차의 거래제도", regimes, horizontal=True) if len(regimes) > 1 else regimes[0]
-            current = current.loc[current.regime.eq(regime)]
-            if len(regimes) > 1:
-                st.warning("제도 변경이 포함된 주차입니다. 3/9~3/13의 3시간 블록 5일과 3/14~3/15의 30분 코마 2일을 별도로 집계한 값입니다.")
-            segment = current.iloc[0]
-            st.caption(f"집계 기준은 {regime}이며, 대상 기간은 {segment.segment_start:%Y-%m-%d}~{segment.segment_end:%Y-%m-%d}입니다. 24시간 기준은 참고용입니다.")
-        previous = history.loc[history.week.eq(week - pd.Timedelta(days=7))].set_index("series")
-        cards = [card for _ in range(0, len(current), 2) for card in st.columns(2)]
-        for card, row in zip(cards, current.itertuples()):
-            with card.container(border=True):
-                if market == "JEPX":
-                    old = previous.loc[row.series, "value"] if row.series in previous.index else float("nan")
-                    jepx_card(row, old)
-                    continue
-                eprx_card(row)
-        if current.value.isna().all():
-            st.warning("선택 주차·지역에 계산 가능한 데이터가 없습니다. 결측은 0으로 표시하지 않습니다.")
-        elif (current.complete_days < (current.expected_days if market == "EPRX" else 7)).any():
-            st.warning("불완전한 주간 데이터입니다. EPRX는 필요한 수 이상의 유효 코마·블록이 있는 날만 집계한 값이며, 일부 관측값만으로 계산된 날은 상세 검증에서 확인할 수 있습니다." if market == "EPRX" else "불완전한 주간 데이터입니다. 유효일만 집계하므로 전주와 비교 시 집계 일수를 확인하세요.")
-        if market == "EPRX":
-            choices = st.multiselect("그래프 시나리오", current.series.tolist(), default=current.series.tolist(), format_func=lambda s: f"{int(s[:-2]) // 2}시간 기준")
-            shown = current.loc[current.series.isin(choices)]
-            bar = alt.Chart(shown).mark_bar(color="#537a96").encode(
-                x=alt.X("series:N", title="시나리오", sort=current.series.tolist(), axis=alt.Axis(labelExpr="(parseInt(datum.label) / 2) + '시간'")),
-                y=alt.Y("value:Q", title="만 엔/MW/년", axis=alt.Axis(labelExpr="format(datum.value / 10000, ',.0f')")),
-                tooltip=[alt.Tooltip("series:N", title="시나리오"), alt.Tooltip("value:Q", title="엔/MW/년", format=",.2f"),
-                         alt.Tooltip("average_price:Q", title="선택 평균가격 (엔/kW·30분)", format=".4f"), alt.Tooltip("valid_days:Q", title="집계 일수")])
-            st.altair_chart(bar.properties(height=240), width="stretch")
-            chart_history = history.loc[history.series.isin(choices)]
-        else:
-            chart_history = history
-        trend(chart_history, week, f"{market}_trend")
-        with st.expander(f"{market} 주간 수치·일별 검증"):
-            table = history.drop(columns="used_periods") if market == "JEPX" else history
-            st.dataframe(table.rename(columns={"week": "주차 시작", "week_end": "주차 종료", "series": "지표" if market == "JEPX" else "시간조건 (30분 환산 수)", "value": "Index (엔/MW/년)", "valid_days": "집계 일수", "complete_days": "완전일 수", "average_price": "평균 스프레드 (엔/kWh)" if market == "JEPX" else "선택 평균가격 (엔/kW·30분)", "quality": "완전성", "regime": "거래제도", "expected_days": "해당 제도 일수", "segment_start": "집계 시작", "segment_end": "집계 종료", "used_periods": "사용 코마 또는 블록 수"}), hide_index=True)
+    market_tabs = st.tabs(["JEPX — 차익거래 수익기회", "EPRX — 조정력 수익기회"])
+    for tab, (market, title) in zip(market_tabs, (("JEPX", "차익거래 수익기회"), ("EPRX", "조정력 수익기회"))):
+        with tab:
+            st.divider()
+            st.subheader(f"{market} — {title}")
+            if market == "JEPX":
+                with st.container(key="jepx_explanation"):
+                    st.markdown("하루 중 전력가격이 가장 높은 2시간 또는 4시간과 가장 낮은 2시간 또는 4시간의 평균 스프레드를 구하고, 이를 주간 평균으로 계산합니다.")
+                    st.markdown("**산식**  \n주간 평균 스프레드 × 1,000kW × 거래시간(2H/4H) × 365일")
+                    st.markdown("**ex)** 2시간형 평균 스프레드 10엔/kWh → 730만 엔/MW/year")
+            else:
+                with st.container(key="eprx_explanation"):
+                    st.markdown("하루 중 최고 낙찰가격이 높은 시간대부터 6·12·18·24시간을 선택하고, 해당 시간대에 모두 낙찰된다고 가정합니다.")
+                    st.markdown("**산식**  \n일별 상위 N개 코마의 최고 낙찰가격 합계 × 1,000kW → 주간 일평균 × 365일")
+                    st.markdown("**ex)** 낙찰가격 5엔/kW·30분, 하루 12코마(6시간) → 2,190만 엔/MW/year")
+                    with st.container(key="eprx_notes"):
+                        st.caption("※ 최고 낙찰가격 기준의 이론적 수익기회로, 실제 평균 낙찰수익과는 차이가 있습니다.")
+                        st.caption("※ 2026년 3월 14일 이전에는 3시간 블록 기준의 별도 산식을 적용합니다.")
+            if market not in sources:
+                st.info(f"{market} 데이터가 없습니다.")
+                continue
+            data = sources[market]
+            history, daily = weekly_results(data, market, area, first, last)
+            current = history.loc[history.week.eq(week)]
             if market == "EPRX":
-                st.dataframe(eprx_quality(data, week, area), hide_index=True)
-                st.caption("고유 시간대·중복은 기존 로더 통합 후 기준입니다. 완전일은 해당 제도의 8개 블록 또는 48개 코마 모두 유효한 날입니다. 파일 간 중복 해소 내역은 아래 원자료 검증에서 확인할 수 있습니다.")
-            st.dataframe(daily.loc[daily.week.eq(week)].drop(columns="week").rename(columns={
-                "delivery_date": "날짜", "date": "날짜", "tb2": "TB2 (엔/kWh)", "tb4": "TB4 (엔/kWh)",
-                "valid": "유효 여부", "reason": "검증 결과", "scenario": "시간조건 (30분 환산 수)", "observed_periods": "관측 시간대 수",
-                "valid_periods": "유효 시간대 수", "missing_prices": "가격 결측", "no_award_periods": "낙찰량 0",
-                "selected_periods": "사용 코마 또는 블록 수", "average_price": "선택 평균가격 (엔/kW·30분)",
-                "daily_opportunity": "일간 기회 (엔/MW)", "complete_day": "모든 시간대 유효", "regime": "거래제도"}), hide_index=True)
-        with st.expander(f"{market} 원자료 검증·중복 해소 내역"):
-            for diagnostic in diagnostics[market]:
-                st.dataframe(diagnostic, hide_index=True)
+                regimes = current.regime.unique().tolist()
+                regime = st.radio("해당 주차의 거래제도", regimes, horizontal=True) if len(regimes) > 1 else regimes[0]
+                current = current.loc[current.regime.eq(regime)]
+                if len(regimes) > 1:
+                    st.warning("제도 변경이 포함된 주차입니다. 3/9~3/13의 3시간 블록 5일과 3/14~3/15의 30분 코마 2일을 별도로 집계한 값입니다.")
+                segment = current.iloc[0]
+                st.caption(f"집계 기준은 {regime}이며, 대상 기간은 {segment.segment_start:%Y-%m-%d}~{segment.segment_end:%Y-%m-%d}입니다. 24시간 기준은 참고용입니다.")
+            previous = history.loc[history.week.eq(week - pd.Timedelta(days=7))].set_index("series")
+            cards = [card for _ in range(0, len(current), 2) for card in st.columns(2)]
+            for card, row in zip(cards, current.itertuples()):
+                with card.container(border=True):
+                    if market == "JEPX":
+                        old = previous.loc[row.series, "value"] if row.series in previous.index else float("nan")
+                        jepx_card(row, old)
+                        continue
+                    eprx_card(row)
+            if current.value.isna().all():
+                st.warning("선택 주차·지역에 계산 가능한 데이터가 없습니다. 결측은 0으로 표시하지 않습니다.")
+            elif (current.complete_days < (current.expected_days if market == "EPRX" else 7)).any():
+                st.warning("불완전한 주간 데이터입니다. EPRX는 필요한 수 이상의 유효 코마·블록이 있는 날만 집계한 값이며, 일부 관측값만으로 계산된 날은 상세 검증에서 확인할 수 있습니다." if market == "EPRX" else "불완전한 주간 데이터입니다. 유효일만 집계하므로 전주와 비교 시 집계 일수를 확인하세요.")
+            if market == "EPRX":
+                choices = st.multiselect("그래프 시나리오", current.series.tolist(), default=current.series.tolist(), format_func=lambda s: f"{int(s[:-2]) // 2}시간 기준")
+                shown = current.loc[current.series.isin(choices)]
+                bar = alt.Chart(shown).mark_bar(color="#537a96").encode(
+                    x=alt.X("series:N", title="시나리오", sort=current.series.tolist(), axis=alt.Axis(labelExpr="(parseInt(datum.label) / 2) + '시간'")),
+                    y=alt.Y("value:Q", title="만 엔/MW/년", axis=alt.Axis(labelExpr="format(datum.value / 10000, ',.0f')")),
+                    tooltip=[alt.Tooltip("series:N", title="시나리오"), alt.Tooltip("value:Q", title="엔/MW/년", format=",.2f"),
+                             alt.Tooltip("average_price:Q", title="선택 평균가격 (엔/kW·30분)", format=".4f"), alt.Tooltip("valid_days:Q", title="집계 일수")])
+                st.altair_chart(bar.properties(height=240), width="stretch")
+                chart_history = history.loc[history.series.isin(choices)]
+            else:
+                chart_history = history
+            trend(chart_history, week, f"{market}_trend")
+            with st.expander(f"{market} 주간 수치·일별 검증"):
+                table = history.drop(columns="used_periods") if market == "JEPX" else history
+                st.dataframe(table.rename(columns={"week": "주차 시작", "week_end": "주차 종료", "series": "지표" if market == "JEPX" else "시간조건 (30분 환산 수)", "value": "Index (엔/MW/년)", "valid_days": "집계 일수", "complete_days": "완전일 수", "average_price": "평균 스프레드 (엔/kWh)" if market == "JEPX" else "선택 평균가격 (엔/kW·30분)", "quality": "완전성", "regime": "거래제도", "expected_days": "해당 제도 일수", "segment_start": "집계 시작", "segment_end": "집계 종료", "used_periods": "사용 코마 또는 블록 수"}), hide_index=True)
+                if market == "EPRX":
+                    st.dataframe(eprx_quality(data, week, area), hide_index=True)
+                    st.caption("고유 시간대·중복은 기존 로더 통합 후 기준입니다. 완전일은 해당 제도의 8개 블록 또는 48개 코마 모두 유효한 날입니다. 파일 간 중복 해소 내역은 아래 원자료 검증에서 확인할 수 있습니다.")
+                st.dataframe(daily.loc[daily.week.eq(week)].drop(columns="week").rename(columns={
+                    "delivery_date": "날짜", "date": "날짜", "tb2": "TB2 (엔/kWh)", "tb4": "TB4 (엔/kWh)",
+                    "valid": "유효 여부", "reason": "검증 결과", "scenario": "시간조건 (30분 환산 수)", "observed_periods": "관측 시간대 수",
+                    "valid_periods": "유효 시간대 수", "missing_prices": "가격 결측", "no_award_periods": "낙찰량 0",
+                    "selected_periods": "사용 코마 또는 블록 수", "average_price": "선택 평균가격 (엔/kW·30분)",
+                    "daily_opportunity": "일간 기회 (엔/MW)", "complete_day": "모든 시간대 유효", "regime": "거래제도"}), hide_index=True)
+            with st.expander(f"{market} 원자료 검증·중복 해소 내역"):
+                for diagnostic in diagnostics[market]:
+                    st.dataframe(diagnostic, hide_index=True)
     methodology()
 
 
