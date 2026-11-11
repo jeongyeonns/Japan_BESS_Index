@@ -1,5 +1,8 @@
 [server]
 headless = true
+# Avoid module eviction racing imports during Community Cloud code updates.
+# Code updates require a process restart; widget reruns remain enabled.
+fileWatcherType = "none"
 
 [browser]
 gatherUsageStats = false
