@@ -61,6 +61,8 @@ def test_actual_dashboard_navigation_and_missing_week():
     assert app.title[0].value == "Japan BESS Market Opportunity Index"
     visible_text = "\n".join(item.value for item in app.main.markdown)
     assert "Modo Energy" in visible_text
+    assert "선택한 주차의 시장가격 수준이 1년간 유지" in visible_text
+    assert "선택 주차의 일평균 수익기회" not in visible_text
     assert "730만 엔/MW/year" in visible_text
     assert "2,190만 엔/MW/year" in visible_text
     assert visible_text.count("**산식**") == 2
