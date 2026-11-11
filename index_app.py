@@ -82,7 +82,7 @@ def fuel_comparison_charts(jepx_monthly, fuel_prices, jkm_prices=None):
     jepx["series"] = jepx["series"].map({"tb2": "JEPX TB2 (?/kWh)", "tb4": "JEPX TB4 (?/kWh)"})
     month_axis = alt.X("month:T", title="?", axis=alt.Axis(format="%Y-%m", tickCount="month"))
     shared_y = alt.Scale(domain=[0, max(1, float(jepx.value.max()) * 1.15)])
-    charts = [("JKM ????(JPX)", "settlement_price_yen_mmbtu", "?/MMBtu"), ("?? LNG ????", "japan_lng_usd_mmbtu", "USD/MMBtu"), ("?? ??? ????", "australia_coal_usd_ton", "USD/?")]
+    charts = [("JKM 연동가격(JPX)", "settlement_price_yen_mmbtu", "?/MMBtu"), ("?? LNG ????", "japan_lng_usd_mmbtu", "USD/MMBtu"), ("?? ??? ????", "australia_coal_usd_ton", "USD/톤")]
     for fuel_label, fuel_column, fuel_unit in charts:
         fuel = merged[["month", fuel_column]].rename(columns={fuel_column: "value"}).dropna()
         fuel["series"] = f"{fuel_label} ({fuel_unit})"
