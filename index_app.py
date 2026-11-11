@@ -87,16 +87,16 @@ def build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, fuel_col
 
 def fuel_comparison_charts(jepx_monthly, fuel_prices, jkm_prices=None):
     st.markdown("#### JEPX 스페레드와발전연료가격비교")
-    st.caption("JEPX? ??? ????? LNG??? ??? ??? ?????.")
-    latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "??"
-    jkm_latest = jkm_prices.comparison_month.max().strftime("%Y-%m") if jkm_prices is not None and not jkm_prices.empty else "??"
-    st.caption(f"World Bank Pink Sheet ?? ???: {latest} ? JPX JKM ?? ???? ???: {jkm_latest}")
-    charts = [("JKM ????(JPX)", "settlement_price_yen_mmbtu", "?/MMBtu"), ("?? LNG ????", "japan_lng_usd_mmbtu", "USD/MMBtu"), ("?? ??? ????", "australia_coal_usd_ton", "USD/?")]
+    st.caption("제프엑스의 월평균 스프레드와 LNG석탄 가격의 추이를 비교합니다.")
+    latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "없음"
+    jkm_latest = jkm_prices.comparison_month.max().strftime("%Y-%m") if jkm_prices is not None and not jkm_prices.empty else "없음"
+    st.caption(f"World Bank Pink Sheet 최신 갱신월: {latest} · JPX JKM 최신 평가기간 종료월: {jkm_latest}")
+    charts = [("JKM 연동가격(JPX)", "settlement_price_yen_mmbtu", "엔/MMBtu"), ("일본 LNG 수입가격", "japan_lng_usd_mmbtu", "USD/MMBtu"), ("호주 발전용 석탄가격", "australia_coal_usd_ton", "USD/톤")]
     for label, column, unit in charts:
         fig = build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, column, label, unit)
-        st.markdown(f"##### JEPX ????? {label}")
+        st.markdown(f"##### JEPX 스프레드와 {label}")
         st.plotly_chart(fig, use_container_width=True)
-    st.caption("JKM? ???? ???? ???? ??? JPX ???????? ??? ??? ????.")
+    st.caption("JKM은 계약월 평가기간의 종료월에 연결한 JPX 최종정산가격이며 달력월 평균이 아닙니다.")
 
 def money(value):
     return "계산 불가" if pd.isna(value) else f"{value / 10000:,.1f}만 엔/MW/year"
