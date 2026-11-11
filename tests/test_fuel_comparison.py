@@ -28,15 +28,16 @@ def test_rendered_fuel_labels_sources_and_plotly_text(monkeypatch):
     monkeypatch.setattr(index_app.st, "plotly_chart", lambda fig, **kwargs: figures.append(fig))
     fuel = load_fuel_prices(("labels", 1))
     jkm = load_jkm_prices(("labels", 1))
-    jepx = pd.DataFrame({"month": fuel.month, "tb2": 2.0, "tb4": 3.0})
+    raw, *_ = index_app.load_all_jepx_data(index_app.DATA_DIRECTORY)
+    jepx = monthly_jepx_spreads(raw, "Tokyo")
     index_app.fuel_comparison_charts(jepx, fuel, jkm)
-    assert texts[0] == "#### JEPX 스프레드와 발전연료 가격 비교"
-    assert texts[1] == "JEPX의 월평균 스프레드와 LNG·석탄 가격의 추이를 비교합니다."
+    assert texts[0] == "### JEPX 스프레드와 발전연료 가격 추이 비교"
+    assert texts[1] == "JEPX의 월평균 스프레드와 주요 발전연료 가격이 비슷한 흐름을 보이는지 비교합니다."
     labels = ["JKM 연동가격(JPX)", "일본 LNG 수입가격", "호주 발전용 석탄가격"]
     units = ["엔/MMBtu", "USD/MMBtu", "USD/톤"]
     assert len(figures) == 3
     for fig, label, unit in zip(figures, labels, units):
-        assert f"##### JEPX 스프레드와 {label}" in texts
+        assert f"#### {label}" in texts
         assert [trace.name for trace in fig.data] == ["JEPX TB2 (엔/kWh)", "JEPX TB4 (엔/kWh)", f"{label} ({unit})"]
         assert fig.layout.xaxis.title.text == "월"
         assert fig.layout.yaxis.title.text == "JEPX 스프레드 (엔/kWh)"
@@ -49,9 +50,25 @@ def test_rendered_fuel_labels_sources_and_plotly_text(monkeypatch):
     assert len(sources) == 3
     assert all("[JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/)" in text for text in sources)
     assert "[JPX LNG (Platts JKM) 선물 최종정산가격](https://www.jpx.co.jp/markets/derivatives/special-quotation/)" in sources[0]
-    for text, label in zip(sources[1:], labels[1:]):
+    for text, label in zip(sources[1:], ["LNG Japan", "Coal Australian"]):
         assert f"[World Bank Pink Sheet ({label})](https://www.worldbank.org/en/research/commodity-markets)" in text
-    assert "평가기간 종료월을 기준으로 표시합니다." in sources[0]
+    assert any("평가기간 종료월을 기준으로 표시한 값입니다." in text for text in texts)
+    assert len([text for text in texts if "  \n" in text]) == 3
+    assert all("최신 확보월" in text and "2026-10" in text for text in sources)
+    assert all(fig.layout.yaxis.range == figures[0].layout.yaxis.range for fig in figures)
+    columns = ["settlement_price_yen_mmbtu", "japan_lng_usd_mmbtu", "australia_coal_usd_ton"]
+    for fig, column, color, unit in zip(figures, columns, ["#DC2626", "#7C3AED", "#EA580C"], units):
+        prices = jkm.rename(columns={"comparison_month": "month"}) if column == columns[0] else fuel
+        expected = jepx.merge(prices[["month", column]], on="month").dropna(subset=["tb2", "tb4", column])
+        expected = expected.loc[expected.month.ge("2026-01-01")].sort_values("month")
+        for trace, field in zip(fig.data, ["tb2", "tb4", column]):
+            assert list(trace.y) == expected[field].tolist()
+            assert list(pd.to_datetime(trace.x)) == expected.month.tolist()
+        assert [t.yaxis for t in fig.data] == ["y", "y", "y2"]
+        assert [t.line.color for t in fig.data] == ["#2563EB", "#0F766E", color]
+        assert [t.line.dash for t in fig.data] == ["solid", "solid", "dot"]
+        assert fig.data[2].line.width == 3 and fig.data[2].marker.size == 7
+        assert unit in fig.data[2].hovertemplate
     assert all("?" not in text and "\ufffd" not in text and "{label}" not in text for text in texts)
     Path(index_app.__file__).read_bytes().decode("utf-8", errors="strict")
 
