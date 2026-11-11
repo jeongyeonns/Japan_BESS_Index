@@ -63,7 +63,10 @@ def test_actual_dashboard_navigation_and_missing_week():
     assert "Modo Energy" in visible_text
     assert "730만 엔/MW/year" in visible_text
     assert "2,190만 엔/MW/year" in visible_text
-    assert visible_text.count("**산식:") == 2
+    assert visible_text.count("**산식**") == 2
+    assert "설명:" not in visible_text
+    assert "제도 변경:" not in visible_text
+    assert sum(c.value.startswith("※") for c in app.caption) == 3
     assert visible_text.count("ex)") == 2
     assert "예를 들어" not in visible_text
     assert not any(e.label in ("JEPX 지표 설명", "EPRX 지표 설명") for e in app.expander)

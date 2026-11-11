@@ -159,13 +159,22 @@ def methodology():
 def main():
     st.set_page_config(page_title="Japan BESS Market Opportunity Index", layout="wide")
     st.title("Japan BESS Market Opportunity Index")
-    st.markdown(
-        "Modo Energy는 영국·독일 등 해외 전력시장의 ESS 수익성을 MW당 연간 금액으로 보여주는 Index를 제공합니다.  \n"
-        "일본은 해당 Index의 공개 대상에 포함되어 있지 않아, 본 앱에서는 JEPX·EPRX 시장가격을 활용해 일본의 지역별·주차별 수익기회를 비교할 수 있도록 했습니다.  \n"
-        "※ 실제 ESS 운영수익이 아닌, 시장가격을 바탕으로 계산한 이론적 수익기회입니다."
-    )
-    st.caption("[Modo Energy 공식 벤치마크](https://modoenergy.com/product/benchmarks)")
+    with st.container(key="index_intro"):
+        with st.container(key="index_intro_copy"):
+            st.markdown("Modo Energy는 영국·독일 등 해외 전력시장의 ESS 수익성을 MW당 연간 금액으로 보여주는 Index를 제공합니다.")
+            st.markdown("일본은 해당 Index의 공개 대상에 포함되어 있지 않아, 본 앱에서는 JEPX·EPRX 시장가격을 활용해 일본의 지역별·주차별 수익기회를 비교할 수 있도록 했습니다.")
+        with st.container(key="index_intro_notes"):
+            st.caption("※ 실제 ESS 운영수익이 아닌, 시장가격을 바탕으로 계산한 이론적 수익기회입니다.")
+            st.caption("[Modo Energy 공식 벤치마크](https://modoenergy.com/product/benchmarks)")
     st.html("""<style>
+        :is(.st-key-index_intro, .st-key-jepx_explanation, .st-key-eprx_explanation),
+        :is(.st-key-index_intro, .st-key-jepx_explanation, .st-key-eprx_explanation)
+        > [data-testid="stVerticalBlock"] { gap: 10px; }
+        :is(.st-key-index_intro_copy, .st-key-index_intro_notes, .st-key-eprx_notes),
+        :is(.st-key-index_intro_copy, .st-key-index_intro_notes, .st-key-eprx_notes)
+        > [data-testid="stVerticalBlock"] { gap: 3px; }
+        :is(.st-key-index_intro, .st-key-jepx_explanation, .st-key-eprx_explanation)
+        [data-testid="stMarkdownContainer"] p { margin: 0; }
         [data-testid="stMetric"] { container-type: inline-size; }
         [data-testid="stMetricValue"] {
             font-size: clamp(0.8rem, 5cqi, 2rem);
@@ -212,19 +221,18 @@ def main():
         st.divider()
         st.subheader(f"{market} — {title}")
         if market == "JEPX":
-            st.markdown(
-                "설명: 하루 중 가격이 가장 높은 2시간 또는 4시간과 가장 낮은 2시간 또는 4시간의 평균 스프레드를 구하고, 이를 주간 평균으로 계산합니다.  \n"
-                "**산식: 주간 평균 스프레드 × 1,000kW × 거래시간(2H/4H) × 365일**  \n"
-                "ex) 2시간형 평균 스프레드 10엔/kWh → 730만 엔/MW/year"
-            )
+            with st.container(key="jepx_explanation"):
+                st.markdown("하루 중 전력가격이 가장 높은 2시간 또는 4시간과 가장 낮은 2시간 또는 4시간의 평균 스프레드를 구하고, 이를 주간 평균으로 계산합니다.")
+                st.markdown("**산식**  \n주간 평균 스프레드 × 1,000kW × 거래시간(2H/4H) × 365일")
+                st.markdown("**ex)** 2시간형 평균 스프레드 10엔/kWh → 730만 엔/MW/year")
         else:
-            st.markdown(
-                "설명: 하루 중 최고 낙찰가격이 높은 6·12·18·24시간을 선택하고, 해당 시간대에 모두 낙찰된다고 가정합니다.  \n"
-                "**산식: 일별 상위 N개 코마의 최고 낙찰가격 합계 × 1,000kW → 주간 일평균 × 365일**  \n"
-                "ex) 낙찰가격 5엔/kW·30분, 하루 12코마(6시간) → 2,190만 엔/MW/year  \n"
-                "주의사항: 최고 낙찰가격 기준의 이론적 수익기회로, 실제 평균 낙찰수익과는 차이가 있습니다.  \n"
-                "제도 변경: 2026년 3월 14일 이전에는 3시간 블록 기준의 별도 산식을 적용합니다."
-            )
+            with st.container(key="eprx_explanation"):
+                st.markdown("하루 중 최고 낙찰가격이 높은 시간대부터 6·12·18·24시간을 선택하고, 해당 시간대에 모두 낙찰된다고 가정합니다.")
+                st.markdown("**산식**  \n일별 상위 N개 코마의 최고 낙찰가격 합계 × 1,000kW → 주간 일평균 × 365일")
+                st.markdown("**ex)** 낙찰가격 5엔/kW·30분, 하루 12코마(6시간) → 2,190만 엔/MW/year")
+                with st.container(key="eprx_notes"):
+                    st.caption("※ 최고 낙찰가격 기준의 이론적 수익기회로, 실제 평균 낙찰수익과는 차이가 있습니다.")
+                    st.caption("※ 2026년 3월 14일 이전에는 3시간 블록 기준의 별도 산식을 적용합니다.")
         if market not in sources:
             st.info(f"{market} 데이터가 없습니다.")
             continue
