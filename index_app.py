@@ -73,23 +73,36 @@ def fuel_comparison_charts(jepx_monthly, fuel_prices, jkm_prices=None):
         jkm = jkm_prices[["comparison_month", "settlement_price_yen_mmbtu"]].rename(columns={"comparison_month": "month"})
         merged = merged.merge(jkm, on="month", how="outer")
     merged = merged.sort_values("month")
-    st.markdown("#### JEPX ????? ???? ?? ??")
-    st.caption("????? ??? ????? LNG??? ??? ??? ?????.")
-    latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "??"
-    jkm_latest = jkm_prices.comparison_month.max().strftime("%Y-%m") if not jkm_prices.empty else "??"
-    st.caption(f"World Bank Pink Sheet ?? ???: {latest} ? JPX JKM ?? ???? ???: {jkm_latest}")
-    jepx = merged.melt("month", ["tb2", "tb4"], var_name="series", value_name="value").dropna()
-    jepx["series"] = jepx["series"].map({"tb2": "JEPX TB2 (?/kWh)", "tb4": "JEPX TB4 (?/kWh)"})
-    month_axis = alt.X("month:T", title="?", axis=alt.Axis(format="%Y-%m", tickCount="month"))
-    shared_y = alt.Scale(domain=[0, max(1, float(jepx.value.max()) * 1.15)])
-    charts = [("JKM 연동가격(JPX)", "settlement_price_yen_mmbtu", "?/MMBtu"), ("?? LNG ????", "japan_lng_usd_mmbtu", "USD/MMBtu"), ("?? ??? ????", "australia_coal_usd_ton", "USD/톤")]
-    for fuel_label, fuel_column, fuel_unit in charts:
-        fuel = merged[["month", fuel_column]].rename(columns={fuel_column: "value"}).dropna()
-        fuel["series"] = f"{fuel_label} ({fuel_unit})"
-        left = alt.Chart(jepx).mark_line(point=True).encode(x=month_axis, y=alt.Y("value:Q", title="JEPX ???? (?/kWh)", scale=shared_y), color=alt.Color("series:N", title="JEPX", scale=alt.Scale(range=["#537a96", "#a66a36"])), tooltip=[alt.Tooltip("month:T", title="?", format="%Y-%m"), alt.Tooltip("series:N", title="??"), alt.Tooltip("value:Q", title="?/kWh", format=",.2f")])
-        right = alt.Chart(fuel).mark_line(point=True, color="#5b8c5a", strokeDash=[5, 3]).encode(x=month_axis, y=alt.Y("value:Q", title=fuel_unit, axis=alt.Axis(orient="right")), tooltip=[alt.Tooltip("month:T", title="?", format="%Y-%m"), alt.Tooltip("series:N", title="??"), alt.Tooltip("value:Q", title=fuel_unit, format=",.2f")])
-        st.altair_chart((left + right).resolve_scale(y="independent").properties(height=280, title=f"JEPX ????? {fuel_label}"), width="stretch")
-    st.caption("JKM? ???? ???? ???? ??? JPX ???????? ??? ??? ????.")
+    st.markdown("#### JEPX \uc2a4\ud504\ub808\ub4dc\uc640 \ubc1c\uc804\uc5f0\ub8cc \uac00\uaca9 \ube44\uad50")
+    st.caption("JEPX\uc758 \uc6d4\ud3c9\uade0 \uc2a4\ud504\ub808\ub4dc\uc640 LNG\u00b7\uc11d\ud0c4 \uac00\uaca9\uc758 \ucd94\uc774\ub97c \ube44\uad50\ud569\ub2c8\ub2e4.")
+    latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "\uc5c6\uc74c"
+    jkm_latest = jkm_prices.comparison_month.max().strftime("%Y-%m") if not jkm_prices.empty else "\uc5c6\uc74c"
+    st.caption(f"World Bank Pink Sheet \ucd5c\uc2e0 \uac31\uc2e0\uc6d4: {latest} \u00b7 JPX JKM \ucd5c\uc2e0 \ud3c9\uac00\uae30\uac04 \uc885\ub8cc\uc6d4: {jkm_latest}")
+    charts = [
+        ("JKM \uc5f0\ub3d9\uac00\uaca9(JPX)", "settlement_price_yen_mmbtu", "JKM \uc5f0\ub3d9\uac00\uaca9 (\uc5d4/MMBtu)"),
+        ("\uc77c\ubcf8 LNG \uc218\uc785\uac00\uaca9", "japan_lng_usd_mmbtu", "\uc77c\ubcf8 LNG \uc218\uc785\uac00\uaca9 (USD/MMBtu)"),
+        ("\ud638\uc8fc \ubc1c\uc804\uc6a9 \uc11d\ud0c4\uac00\uaca9", "australia_coal_usd_ton", "\ud638\uc8fc \ubc1c\uc804\uc6a9 \uc11d\ud0c4\uac00\uaca9 (USD/\ud1a4)"),
+    ]
+    month_axis = alt.X("month:T", title="\uc6d4", axis=alt.Axis(format="%Y-%m", tickCount="month"))
+    for fuel_label, fuel_column, fuel_title in charts:
+        common = merged.loc[(merged.month >= pd.Timestamp("2026-01-01")) & merged.tb2.notna() & merged.tb4.notna() & merged[fuel_column].notna()].copy()
+        jepx = common.melt("month", ["tb2", "tb4"], var_name="series", value_name="value")
+        jepx["series"] = jepx["series"].map({"tb2": "JEPX TB2 (\uc5d4/kWh)", "tb4": "JEPX TB4 (\uc5d4/kWh)"})
+        fuel = common[["month", fuel_column]].rename(columns={fuel_column: "value"})
+        fuel["series"] = fuel_title
+        jepx_max = float(jepx.value.max()) if not jepx.empty else 1.0
+        shared_y = alt.Scale(domain=[0, max(1.0, jepx_max * 1.15)])
+        left = alt.Chart(jepx).mark_line(point=True).encode(
+            x=month_axis, y=alt.Y("value:Q", title="JEPX \uc2a4\ud504\ub808\ub4dc (\uc5d4/kWh)", scale=shared_y),
+            color=alt.Color("series:N", title="JEPX", scale=alt.Scale(domain=["JEPX TB2 (\uc5d4/kWh)", "JEPX TB4 (\uc5d4/kWh)"], range=["#537a96", "#a66a36"])),
+            tooltip=[alt.Tooltip("month:T", title="\uc6d4", format="%Y-%m"), alt.Tooltip("series:N", title="\uc9c0\ud45c"), alt.Tooltip("value:Q", title="\uc5d4/kWh", format=",.2f")])
+        right = alt.Chart(fuel).mark_line(point=True, color="#5b8c5a", strokeDash=[5, 3]).encode(
+            x=month_axis, y=alt.Y("value:Q", title=fuel_title, axis=alt.Axis(orient="right")),
+            color=alt.Color("series:N", title="\uc5f0\ub8cc", scale=alt.Scale(range=["#5b8c5a"])),
+            tooltip=[alt.Tooltip("month:T", title="\uc6d4", format="%Y-%m"), alt.Tooltip("series:N", title="\uc5f0\ub8cc"), alt.Tooltip("value:Q", title=fuel_title, format=",.2f")])
+        chart = (left + right).resolve_scale(y="independent").resolve_legend(color="independent").properties(height=280, title=f"JEPX \uc2a4\ud504\ub808\ub4dc\uc640 {fuel_label}")
+        st.altair_chart(chart, width="stretch")
+    st.caption("JKM\uc740 \uacc4\uc57d\uc6d4\uc758 \ud3c9\uac00\uae30\uac04 \uc885\ub8cc\uc6d4\uc5d0 \uc5f0\uacb0\ud55c JPX \ucd5c\uc885\uc815\uc0b0\uac00\uaca9\uc774\uba70 \ub2ec\ub825\uc6d4 \ud3c9\uade0\uc774 \uc544\ub2d9\ub2c8\ub2e4.")
 
 def money(value):
     return "계산 불가" if pd.isna(value) else f"{value / 10000:,.1f}만 엔/MW/year"
