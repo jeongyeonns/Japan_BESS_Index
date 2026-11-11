@@ -59,6 +59,14 @@ def test_actual_dashboard_navigation_and_missing_week():
     app = AppTest.from_file(str(ROOT / "index_app.py")).run(timeout=180)
     assert not app.exception
     assert app.title[0].value == "Japan BESS Market Opportunity Index"
+    visible_text = "\n".join(item.value for item in app.main.markdown)
+    assert "Modo Energy" in visible_text
+    assert "730만 엔/MW/year" in visible_text
+    assert "2,190만 엔/MW/year" in visible_text
+    assert visible_text.count("**연환산 Index =") == 2
+    assert not any(e.label in ("JEPX 지표 설명", "EPRX 지표 설명") for e in app.expander)
+    assert not any(c.value == "엔/MW/년" for c in app.caption)
+    assert all(m.value == "계산 불가" or m.value.endswith("만 엔/MW/year") for m in app.metric)
     assert len(app.get("vega_lite_chart")) == 3
     for area in ("Tokyo", "Chubu", "Kyushu"):
         app.selectbox[1].select(area)

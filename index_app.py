@@ -37,7 +37,7 @@ def load_eprx_data(signatures):
 
 
 def money(value):
-    return "계산 불가" if pd.isna(value) else f"{value / 10000:,.1f}만 엔"
+    return "계산 불가" if pd.isna(value) else f"{value / 10000:,.1f}만 엔/MW/year"
 
 
 def change(current, previous):
@@ -113,9 +113,8 @@ def trend(history, selected_week, key):
 
 def jepx_card(row, previous):
     label = f"{row.series[-1]}시간형 차익거래 Index ({row.series})"
-    exact = "계산 가능한 데이터가 없습니다." if pd.isna(row.value) else f"{row.value:,.2f} 엔/MW/년"
+    exact = "계산 가능한 데이터가 없습니다." if pd.isna(row.value) else f"{row.value:,.2f} 엔/MW/year"
     st.metric(label, money(row.value), delta=change(row.value, previous), help=exact)
-    st.caption("엔/MW/년")
     st.divider()
     spread = "—" if pd.isna(row.average_price) else f"{row.average_price:,.2f}엔/kWh"
     st.html(f"""<div style="display:grid;grid-template-columns:1fr auto;gap:0.5rem 1rem;font-size:0.95rem;">
@@ -126,9 +125,8 @@ def jepx_card(row, previous):
 
 def eprx_card(row):
     hours = int(row.series[:-2]) // 2
-    exact = "계산 가능한 데이터가 없습니다." if pd.isna(row.value) else f"{row.value:,.2f} 엔/MW/년"
+    exact = "계산 가능한 데이터가 없습니다." if pd.isna(row.value) else f"{row.value:,.2f} 엔/MW/year"
     st.metric(f"{hours}시간 기준 조정력 Index", money(row.value), help=exact)
-    st.caption("엔/MW/년")
     st.divider()
     price = "—" if pd.isna(row.average_price) else f"{row.average_price:,.2f}엔/kW·30분"
     price_label = "선택 블록 평균 최고 낙찰가격" if row.regime == LEGACY_LABEL else "선택 코마 평균 최고 낙찰가격"
@@ -152,18 +150,26 @@ def eprx_quality(data, week, area):
 
 
 def methodology():
-    with st.expander("계산방법 및 유의사항"):
-        st.markdown("**JEPX** · 인접 30분 가격을 1시간 평균으로 변환한 뒤 상위·하위 2/4시간의 평균 차이를 계산합니다. 주간 평균 TB2·TB4 스프레드 × 1,000 × 2/4 × 365로 1MW 기준 연환산합니다. 충방전 효율과 실제 운영 제약은 반영하지 않습니다.")
-        st.markdown("**EPRX** · 전원 소재지역별 최고 낙찰가격을 기준으로 매일 가격이 높은 상위 N개 코마에 모두 낙찰된다고 가정한 이론적 상단 수익기회입니다. 실제 ESS 낙찰수익이나 시장 평균수익을 의미하지 않습니다. 일별 선택 가격 합 × 1,000의 유효일 평균 × 365이며, 원자료 단위는 円/kW・30分이므로 0.5를 추가로 곱하지 않습니다.")
-        st.markdown("**데이터** · JEPX는 48코마가 모두 유효한 날, EPRX는 필요한 수의 유효 코마 또는 블록이 있는 날만 집계한 값입니다. 3/13 이전 EPRX는 상위 2·4·6·8개 3시간 블록의 가격 합 × 6 × 1,000을 일별로 계산한 별도 지표입니다. 3/9~3/15는 이전 5일과 이후 2일을 분리한 평균이며, 두 제도를 혼합한 평균은 제공하지 않습니다. 온라인·오프라인 구분은 원자료에 없는 정보입니다. 낙찰량 0과 결측은 제외 대상이며, 낙찰량 양수의 실제 0엔 가격은 유효한 값입니다.")
+    with st.expander("데이터 해석 및 유의사항"):
+        st.markdown("JEPX는 48코마가 모두 유효한 날, EPRX는 필요한 수의 유효 코마 또는 블록이 있는 날만 집계한 값입니다. 3/9~3/15는 이전 5일과 이후 2일을 분리한 평균이며, 두 제도를 혼합한 평균은 제공하지 않습니다. 온라인·오프라인 구분은 원자료에 없는 정보입니다. 낙찰량 0과 결측은 제외 대상이며, 낙찰량 양수의 실제 0엔 가격은 유효한 값입니다.")
         st.markdown("EPRX는 공표된 최고 낙찰가격 기준이며, 상한가격 적용·사후 정산·페널티·수수료를 반영한 실제 정산액과는 다른 값입니다.")
-        st.markdown("**공통** · 선택 주차의 가격 수준이 1년간 유지된다고 가정한 연환산 값입니다. JEPX와 EPRX 지표를 단순 합산하여 실제 ESS 총수익으로 해석해서는 안 됩니다. 결측은 0으로 대체하지 않습니다. 전주 대비는 정확히 7일 전 주차와 비교하며, 전주 값이 없거나 0이면 표시하지 않습니다. 불완전한 주차 간 비교에는 주의가 필요합니다.")
+        st.markdown("JEPX와 EPRX 지표를 단순 합산한 값은 실제 ESS 총수익이 아닙니다. 결측은 0으로 대체하지 않습니다. 전주 대비는 정확히 7일 전 주차와 비교한 값이며, 전주 값이 없거나 0이면 표시하지 않습니다. 불완전한 주차를 비교할 때는 집계 일수도 함께 확인하는 것이 필요합니다.")
 
 
 def main():
     st.set_page_config(page_title="Japan BESS Market Opportunity Index", layout="wide")
     st.title("Japan BESS Market Opportunity Index")
-    st.caption("일본 전력시장 · JST 월~일 기준 · 모든 Index는 엔/MW/년")
+    st.markdown("영국·미국·독일 등 해외 전력시장에서는 Modo Energy가 ESS 수익성과 차익거래 기회를 MW당 연간 금액으로 환산한 Index를 제공하고 있습니다. 이러한 지표는 지역별 시장 수익성을 비교하고, ESS 사업성과 투자 기회를 검토하는 데 활용됩니다.")
+    st.markdown("반면 Modo Energy의 공개 벤치마크 페이지에는 아직 일본 전력시장이 포함되어 있지 않습니다. 이에 본 앱에서는 일본 JEPX와 EPRX의 시장가격을 활용해 지역별·주차별 수익기회를 엔/MW/year 단위로 환산하고, 전력시장 수익성이 어떻게 변화하는지 쉽게 비교할 수 있도록 했습니다.")
+    st.caption("※ 본 Index는 실제 ESS 운영수익이 아닌, 공개 시장가격과 가정된 거래시간을 바탕으로 계산한 이론적 수익기회입니다.")
+    st.caption("Modo Energy에는 실제 자산 수익이나 가상 ESS 최적화를 활용하는 지수도 있으며, 본 앱은 이와 산정방법이 다른 시장가격 기반의 간소화된 Index입니다. [Modo Energy 공식 벤치마크](https://modoenergy.com/product/benchmarks)")
+    st.html("""<style>
+        [data-testid="stMetric"] { container-type: inline-size; }
+        [data-testid="stMetricValue"] {
+            font-size: clamp(0.8rem, 5cqi, 2rem);
+            white-space: nowrap;
+        }
+    </style>""")
     sources, diagnostics = {}, {}
     for market, directory, finder, loader in (("JEPX", DATA_DIRECTORY, find_jepx_files, load_data), ("EPRX", EPRX_DIRECTORY, find_eprx_files, load_eprx_data)):
         try:
@@ -200,22 +206,21 @@ def main():
         return
     area = controls[1].selectbox("분석 지역", areas, format_func=lambda a: JEPX_AREA_DISPLAY[a])
     st.caption(f"{JEPX_AREA_DISPLAY[area]} | {week:%Y-%m-%d} (월) ~ {week + pd.Timedelta(days=6):%Y-%m-%d} (일)")
-    for market, title in (("JEPX", "차익거래 수익기회"), ("EPRX", "1차 조정력 수익기회")):
+    for market, title in (("JEPX", "차익거래 수익기회"), ("EPRX", "조정력 수익기회")):
         st.divider()
         st.subheader(f"{market} — {title}")
         if market == "JEPX":
-            st.markdown("하루 중 고가·저가 2시간 또는 4시간의 평균 스프레드를 기준으로 한 MW당 연간 차익거래 수익기회입니다.")
-            with st.expander("JEPX 지표 설명"):
-                st.markdown("하루 중 전력가격이 가장 높은 2시간 또는 4시간과 가장 낮은 2시간 또는 4시간의 평균 스프레드를 계산합니다. 선택한 주차의 평균 스프레드가 1년간 유지된다고 가정하여 MW당 연간 수익기회로 환산한 지표입니다.")
-                st.code("주간 평균 스프레드(엔/kWh) × 1,000kW × 거래시간(2시간 또는 4시간) × 365일", language=None)
-                st.caption("계산방법 설명용 예시입니다. 2시간 기준 주간 평균 스프레드가 10엔/kWh라면 730만 엔/MW/년이며, 실제 선택 주차의 시장값은 아닙니다.")
+            st.markdown("하루 중 전력가격이 가장 높은 2시간 또는 4시간과 가장 낮은 2시간 또는 4시간의 평균 스프레드를 계산합니다. 선택 주차의 평균 스프레드가 1년간 유지된다고 가정해 1MW당 연간 수익기회로 환산한 값입니다.")
+            st.markdown("**연환산 Index = 주간 평균 스프레드(엔/kWh) × 1,000kW × 거래시간(2시간 또는 4시간) × 365일**")
+            st.markdown("예를 들어 2시간형의 주간 평균 스프레드가 10엔/kWh라면 연환산 Index는 730만 엔/MW/year입니다.")
+            st.caption("계산방법 설명용 예시이며 실제 선택 주차의 시장값은 아닙니다. 인접한 30분 가격을 1시간 평균가격으로 변환한 뒤 고가·저가 시간대를 선택하는 방식이며, 충방전 효율과 실제 운영 제약은 반영하지 않은 지표입니다.")
         else:
-            st.markdown("최고 낙찰가격이 높은 시간대에 하루 6·12·18·24시간 모두 낙찰된다고 가정한 연환산 수익기회입니다. 실제 낙찰시간을 보장하는 지표는 아닙니다.")
-            with st.expander("EPRX 지표 설명"):
-                st.markdown("하루 중 최고 낙찰가격이 높은 시간대부터 6시간, 12시간, 18시간 또는 24시간을 선택합니다. 선택한 시간대에 모두 낙찰된다고 가정하고, 해당 주차의 일평균 수익기회를 365일 기준으로 환산한 지표입니다.")
-                st.code("30분 코마: 일별 상위 N개 최고 낙찰가격 합계 × 1,000kW → 해당 주차의 일평균 × 365일\n3시간 블록: 일별 상위 2·4·6·8개 최고 낙찰가격 합계 × 6코마 × 1,000kW → 제도별 일평균 × 365일", language=None)
-                st.caption("계산방법 설명용 예시입니다. 모든 30분 낙찰가격이 5엔/kW·30분이고 하루 12코마(6시간)에 모두 낙찰된다면 2,190만 엔/MW/년이며, 실제 시장값은 아닙니다.")
-                st.markdown("[3시간 블록·정산 근거: EPRX 2025년 규정 제29·46조](https://www.eprx.or.jp/j_information/docs/kitei211f_20250401.pdf) · [2026-03-14 제도 변경 안내](https://www.occto.or.jp/assets/iinkai/jukyuchousei/58/jukyu_shijyo_58_05.pdf)")
+            st.markdown("하루 중 최고 낙찰가격이 높은 시간대부터 6시간, 12시간, 18시간 또는 24시간을 선택합니다. 해당 시간대에 모두 낙찰된다고 가정하여 일별 수익기회를 계산하고, 선택 주차의 일평균 수익기회를 365일 기준으로 연환산한 값입니다.")
+            st.markdown("**연환산 Index = 일별 상위 N개 코마의 최고 낙찰가격 합계(엔/kW·30분) × 1,000kW → 주간 일평균 × 365일**")
+            st.markdown("예를 들어 최고 낙찰가격이 5엔/kW·30분이고 하루 12코마(6시간)에 모두 낙찰된다고 가정하면 연환산 Index는 2,190만 엔/MW/year입니다.")
+            st.caption("모든 선택 코마의 가격을 5엔으로 가정한 계산방법 설명용 예시이며 실제 시장값은 아닙니다. 현재는 평균 낙찰가격이 아닌 전원 소재지역별 최고 낙찰가격을 활용하므로, 실제 시장 평균수익보다 높게 나타날 수 있는 이론적 상단 수익기회입니다. 실제 낙찰시간을 보장하는 지표는 아닙니다.")
+            st.markdown("2026년 3월 14일 이전은 3시간 블록 기준의 별도 계산입니다. 하루 상위 2·4·6·8개 블록의 가격 합계에 6코마와 1,000kW를 곱한 뒤, 같은 제도에 해당하는 일평균에 365일을 곱한 값입니다.")
+            st.caption("원자료는 엔/kW·30분 단위이므로 0.5를 추가로 곱하지 않는 방식입니다. [3시간 블록·정산 근거](https://www.eprx.or.jp/j_information/docs/kitei211f_20250401.pdf)와 [2026-03-14 제도 변경 안내](https://www.occto.or.jp/assets/iinkai/jukyuchousei/58/jukyu_shijyo_58_05.pdf)를 참고한 계산입니다.")
         if market not in sources:
             st.info(f"{market} 데이터가 없습니다.")
             continue
@@ -231,8 +236,6 @@ def main():
             segment = current.iloc[0]
             st.caption(f"집계 기준은 {regime}이며, 대상 기간은 {segment.segment_start:%Y-%m-%d}~{segment.segment_end:%Y-%m-%d}입니다. 24시간 기준은 참고용입니다.")
         previous = history.loc[history.week.eq(week - pd.Timedelta(days=7))].set_index("series")
-        if market == "EPRX":
-            st.caption("전원 소재지역별 최고 낙찰가격 · 円/kW・30分 · 48코마는 24시간 참고 시나리오")
         cards = [card for _ in range(0, len(current), 2) for card in st.columns(2)]
         for card, row in zip(cards, current.itertuples()):
             with card.container(border=True):

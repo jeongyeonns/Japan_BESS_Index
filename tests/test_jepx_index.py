@@ -64,7 +64,7 @@ class IndexTests(unittest.TestCase):
         week, area = app.selectbox[0].value, app.selectbox[1].value
         _, expected = calculate_week_index(data, week, area)
         self.assertGreater(expected["valid_days"], 0)
-        self.assertEqual(app.metric[0].value, f'{expected["tb2_index"] / 10000:,.1f}만 엔')
+        self.assertEqual(app.metric[0].value, f'{expected["tb2_index"] / 10000:,.1f}만 엔/MW/year')
         first = data["delivery_date"].min()
         first -= pd.Timedelta(days=first.weekday())
         app.selectbox[0].select(first).run(timeout=60)
