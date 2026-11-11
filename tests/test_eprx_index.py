@@ -85,7 +85,7 @@ class EprxIndexTests(unittest.TestCase):
         _, summary = calculate_eprx_week_index(data, week, area)
         self.assertGreater(summary.iloc[0].valid_days, 0)
         self.assertEqual(app.metric[2].value, f'{summary.iloc[0].annual_index / 10000:,.1f}만 엔/MW/year')
-        self.assertTrue(any("실제 ESS 낙찰수익을 의미하지 않습니다" in item.value for item in app.info))
+        self.assertTrue(any("실제 평균 낙찰수익과는 차이가 있습니다" in item.value for item in app.markdown))
 
 
 if __name__ == "__main__":
