@@ -13,7 +13,7 @@ def test_fuel_figure_has_three_visible_traces_and_secondary_axis():
     assert list(fig.data[2].y) == [1500.0, 1600.0]
     assert fig.data[2].yaxis == "y2"
     assert all(trace.showlegend is not False for trace in fig.data)
-    assert list(fig.data[0].x)[0].year == 2026
+    assert pd.Timestamp(list(fig.data[0].x)[0]).year == 2026
 
 
 def test_jpx_jkm_contract_period_and_unit():
