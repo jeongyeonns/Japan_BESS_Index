@@ -79,14 +79,14 @@ def build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, fuel_col
     fig.add_trace(go.Scatter(x=common.month, y=common.tb4, name="JEPX TB4 (엔/kWh)", mode="lines+markers", line={"color": "#a66a36"}), secondary_y=False)
     fig.add_trace(go.Scatter(x=common.month, y=common[fuel_column], name=f"{fuel_label} ({fuel_unit})", mode="lines+markers", line={"color": "#5b8c5a", "dash": "dot"}), secondary_y=True)
     fig.update_layout(height=280, margin={"l": 65, "r": 80, "t": 20, "b": 45}, legend={"orientation": "h", "y": 1.12}, hovermode="x unified")
-    fig.update_xaxes(title_text="?", tickformat="%Y-%m", dtick="M1")
-    fig.update_yaxes(title_text="JEPX ???? (?/kWh)", secondary_y=False, rangemode="tozero" )
+    fig.update_xaxes(title_text="월", tickformat="%Y-%m", dtick="M1")
+    fig.update_yaxes(title_text="JEPX 스페레드 (엔/kWh)", secondary_y=False, rangemode="tozero" )
     fig.update_yaxes(title_text=fuel_unit, secondary_y=True, rangemode="tozero")
     return fig
 
 
 def fuel_comparison_charts(jepx_monthly, fuel_prices, jkm_prices=None):
-    st.markdown("#### JEPX ????? ???? ?? ??")
+    st.markdown("#### JEPX 스페레드와발전연료가격비교")
     st.caption("JEPX? ??? ????? LNG??? ??? ??? ?????.")
     latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "??"
     jkm_latest = jkm_prices.comparison_month.max().strftime("%Y-%m") if jkm_prices is not None and not jkm_prices.empty else "??"
