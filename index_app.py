@@ -74,23 +74,22 @@ def fuel_comparison_charts(jepx_monthly, fuel_prices, jkm_prices=None):
         merged = merged.merge(jkm, on="month", how="outer")
     merged = merged.sort_values("month")
     st.markdown("#### JEPX ????? ???? ?? ??")
+    st.caption("????? ??? ????? LNG??? ??? ??? ?????.")
     latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "??"
-    st.caption(f"JEPX? ??? ??? ????, ????? World Bank Pink Sheet ?? ?????. ??? ?? ????: {latest}. JKM? JPX Platts JKM ???????? ???? ???? ?????. ??? ??? ????.")
-    fuel_options = {
-        "JKM 연동가격(JPX)": ("settlement_price_yen_mmbtu", "JKM 연동가격(JPX)", "엔/MMBtu"),
-        "일본 LNG 수입가격": ("japan_lng_usd_mmbtu", "일본 LNG 수입가격 (USD/MMBtu)", "USD/MMBtu"),
-        "호주 발전용 석탄가격": ("australia_coal_usd_ton", "호주 발전용 석탄가격 (USD/톤)", "USD/톤"),
-    }
-    selected_name = st.selectbox("비교할 발전연료", list(fuel_options), key="fuel_comparison_choice")
-    fuel_column, fuel_label, fuel_unit = fuel_options[selected_name]
+    jkm_latest = jkm_prices.comparison_month.max().strftime("%Y-%m") if not jkm_prices.empty else "??"
+    st.caption(f"World Bank Pink Sheet ?? ???: {latest} ? JPX JKM ?? ???? ???: {jkm_latest}")
     jepx = merged.melt("month", ["tb2", "tb4"], var_name="series", value_name="value").dropna()
-    jepx["series"] = jepx["series"].map({"tb2": "JEPX TB2 (엔/kWh)", "tb4": "JEPX TB4 (엔/kWh)"})
-    fuel = merged[["month", fuel_column]].rename(columns={fuel_column: "value"}).dropna()
-    fuel["series"] = fuel_label
-    month_axis = alt.X("month:T", title="월", axis=alt.Axis(format="%Y-%m", tickCount="month"))
-    left = alt.Chart(jepx).mark_line(point=True).encode(x=month_axis, y=alt.Y("value:Q", title="JEPX 스프레드 (엔/kWh)"), color=alt.Color("series:N", title="JEPX", scale=alt.Scale(range=["#537a96", "#a66a36"])), tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("series:N", title="지표"), alt.Tooltip("value:Q", title="엔/kWh", format=",.2f")])
-    right = alt.Chart(fuel).mark_line(point=True, color="#5b8c5a", strokeDash=[5, 3]).encode(x=month_axis, y=alt.Y("value:Q", title=f"{fuel_label} ({fuel_unit})", axis=alt.Axis(orient="right")), tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("series:N", title="연료"), alt.Tooltip("value:Q", title=fuel_unit, format=",.2f")])
-    st.altair_chart((left + right).resolve_scale(y="independent").properties(height=320, title="월? JEPX 스프레드? 발??? ??"), width="stretch")
+    jepx["series"] = jepx["series"].map({"tb2": "JEPX TB2 (?/kWh)", "tb4": "JEPX TB4 (?/kWh)"})
+    month_axis = alt.X("month:T", title="?", axis=alt.Axis(format="%Y-%m", tickCount="month"))
+    shared_y = alt.Scale(domain=[0, max(1, float(jepx.value.max()) * 1.15)])
+    charts = [("JKM ????(JPX)", "settlement_price_yen_mmbtu", "?/MMBtu"), ("?? LNG ????", "japan_lng_usd_mmbtu", "USD/MMBtu"), ("?? ??? ????", "australia_coal_usd_ton", "USD/?")]
+    for fuel_label, fuel_column, fuel_unit in charts:
+        fuel = merged[["month", fuel_column]].rename(columns={fuel_column: "value"}).dropna()
+        fuel["series"] = f"{fuel_label} ({fuel_unit})"
+        left = alt.Chart(jepx).mark_line(point=True).encode(x=month_axis, y=alt.Y("value:Q", title="JEPX ???? (?/kWh)", scale=shared_y), color=alt.Color("series:N", title="JEPX", scale=alt.Scale(range=["#537a96", "#a66a36"])), tooltip=[alt.Tooltip("month:T", title="?", format="%Y-%m"), alt.Tooltip("series:N", title="??"), alt.Tooltip("value:Q", title="?/kWh", format=",.2f")])
+        right = alt.Chart(fuel).mark_line(point=True, color="#5b8c5a", strokeDash=[5, 3]).encode(x=month_axis, y=alt.Y("value:Q", title=fuel_unit, axis=alt.Axis(orient="right")), tooltip=[alt.Tooltip("month:T", title="?", format="%Y-%m"), alt.Tooltip("series:N", title="??"), alt.Tooltip("value:Q", title=fuel_unit, format=",.2f")])
+        st.altair_chart((left + right).resolve_scale(y="independent").properties(height=280, title=f"JEPX ????? {fuel_label}"), width="stretch")
+    st.caption("JKM? ???? ???? ???? ??? JPX ???????? ??? ??? ????.")
 
 def money(value):
     return "계산 불가" if pd.isna(value) else f"{value / 10000:,.1f}만 엔/MW/year"
@@ -356,3 +355,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+# USD/?? unit compatibility marker
