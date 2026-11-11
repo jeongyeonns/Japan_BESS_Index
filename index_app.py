@@ -23,6 +23,7 @@ BASE = Path(__file__).resolve().parent
 DATA_DIRECTORY = BASE / "data/jepx/raw"
 EPRX_DIRECTORY = BASE / "data/eprx"
 FUEL_PRICE_FILE = BASE / "data/fuel_prices_2026.csv"
+JKM_PRICE_FILE = BASE / "data/jkm_prices_jpx_2026.csv"
 LEGACY_LABEL = "3시간 블록"
 MODERN_LABEL = "30분 코마"
 
@@ -45,6 +46,15 @@ def load_fuel_prices(signature):
     return prices.sort_values("month")
 
 
+@st.cache_data
+def load_jkm_prices(signature):
+    columns = ["contract_month", "evaluation_start", "evaluation_end", "comparison_month", "settlement_price_yen_mmbtu"]
+    if not JKM_PRICE_FILE.exists():
+        return pd.DataFrame(columns=columns)
+    prices = pd.read_csv(JKM_PRICE_FILE, parse_dates=["evaluation_start", "evaluation_end", "comparison_month"])
+    return prices.sort_values("comparison_month")
+
+
 def monthly_jepx_spreads(data, area):
     dates = pd.to_datetime(data.delivery_date).dt.normalize()
     first = dates.min() - pd.Timedelta(days=dates.min().weekday())
@@ -56,12 +66,18 @@ def monthly_jepx_spreads(data, area):
     return daily.groupby("month", as_index=False)[["tb2", "tb4"]].mean()
 
 
-def fuel_comparison_charts(jepx_monthly, fuel_prices):
-    merged = jepx_monthly.merge(fuel_prices, on="month", how="outer").sort_values("month")
-    st.markdown("#### JEPX 스프레드와 발전연료 가격 비교")
-    latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "없음"
-    st.caption(f"JEPX는 지역별 월평균 스프레드, 연료가격은 World Bank Pink Sheet 월별 가격입니다. 저장된 최신 연료가격: {latest}. JKM 공개 시계열은 확인되지 않아 연결하지 않았습니다.")
+def fuel_comparison_charts(jepx_monthly, fuel_prices, jkm_prices=None):
+    jkm_prices = jkm_prices if jkm_prices is not None else pd.DataFrame()
+    merged = jepx_monthly.merge(fuel_prices, on="month", how="outer")
+    if not jkm_prices.empty:
+        jkm = jkm_prices[["comparison_month", "settlement_price_yen_mmbtu"]].rename(columns={"comparison_month": "month"})
+        merged = merged.merge(jkm, on="month", how="outer")
+    merged = merged.sort_values("month")
+    st.markdown("#### JEPX ????? ???? ?? ??")
+    latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "??"
+    st.caption(f"JEPX? ??? ??? ????, ????? World Bank Pink Sheet ?? ?????. ??? ?? ????: {latest}. JKM? JPX Platts JKM ???????? ???? ???? ?????. ??? ??? ????.")
     fuel_options = {
+        "JKM 연동가격(JPX)": ("settlement_price_yen_mmbtu", "JKM 연동가격(JPX)", "엔/MMBtu"),
         "일본 LNG 수입가격": ("japan_lng_usd_mmbtu", "일본 LNG 수입가격 (USD/MMBtu)", "USD/MMBtu"),
         "호주 발전용 석탄가격": ("australia_coal_usd_ton", "호주 발전용 석탄가격 (USD/톤)", "USD/톤"),
     }
@@ -72,15 +88,9 @@ def fuel_comparison_charts(jepx_monthly, fuel_prices):
     fuel = merged[["month", fuel_column]].rename(columns={fuel_column: "value"}).dropna()
     fuel["series"] = fuel_label
     month_axis = alt.X("month:T", title="월", axis=alt.Axis(format="%Y-%m", tickCount="month"))
-    left = alt.Chart(jepx).mark_line(point=True).encode(
-        x=month_axis, y=alt.Y("value:Q", title="JEPX 스프레드 (엔/kWh)"),
-        color=alt.Color("series:N", title="JEPX", scale=alt.Scale(range=["#537a96", "#a66a36"])),
-        tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("series:N", title="지표"), alt.Tooltip("value:Q", title="엔/kWh", format=",.2f")])
-    right = alt.Chart(fuel).mark_line(point=True, color="#5b8c5a", strokeDash=[5, 3]).encode(
-        x=month_axis, y=alt.Y("value:Q", title=f"{fuel_label} ({fuel_unit})", axis=alt.Axis(orient="right")),
-        tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("series:N", title="연료"), alt.Tooltip("value:Q", title=fuel_unit, format=",.2f")])
-    st.altair_chart((left + right).resolve_scale(y="independent").properties(height=320, title="월평균 JEPX 스프레드와 발전연료 가격"), width="stretch")
-
+    left = alt.Chart(jepx).mark_line(point=True).encode(x=month_axis, y=alt.Y("value:Q", title="JEPX 스프레드 (엔/kWh)"), color=alt.Color("series:N", title="JEPX", scale=alt.Scale(range=["#537a96", "#a66a36"])), tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("series:N", title="지표"), alt.Tooltip("value:Q", title="엔/kWh", format=",.2f")])
+    right = alt.Chart(fuel).mark_line(point=True, color="#5b8c5a", strokeDash=[5, 3]).encode(x=month_axis, y=alt.Y("value:Q", title=f"{fuel_label} ({fuel_unit})", axis=alt.Axis(orient="right")), tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("series:N", title="연료"), alt.Tooltip("value:Q", title=fuel_unit, format=",.2f")])
+    st.altair_chart((left + right).resolve_scale(y="independent").properties(height=320, title="월? JEPX 스프레드? 발??? ??"), width="stretch")
 
 def money(value):
     return "계산 불가" if pd.isna(value) else f"{value / 10000:,.1f}만 엔/MW/year"
@@ -323,8 +333,9 @@ def main():
             trend(chart_history, week, f"{market}_trend")
             if market == "JEPX":
                 fuel_prices = load_fuel_prices((str(FUEL_PRICE_FILE), FUEL_PRICE_FILE.stat().st_mtime_ns) if FUEL_PRICE_FILE.exists() else None)
-                if not fuel_prices.empty:
-                    fuel_comparison_charts(monthly_jepx_spreads(data, area), fuel_prices)
+                jkm_prices = load_jkm_prices((str(JKM_PRICE_FILE), JKM_PRICE_FILE.stat().st_mtime_ns) if JKM_PRICE_FILE.exists() else None)
+                if not fuel_prices.empty or not jkm_prices.empty:
+                    fuel_comparison_charts(monthly_jepx_spreads(data, area), fuel_prices, jkm_prices)
             with st.expander(f"{market} 주간 수치·일별 검증"):
                 table = history.drop(columns="used_periods") if market == "JEPX" else history
                 st.dataframe(table.rename(columns={"week": "주차 시작", "week_end": "주차 종료", "series": "지표" if market == "JEPX" else "시간조건 (30분 환산 수)", "value": "Index (엔/MW/년)", "valid_days": "집계 일수", "complete_days": "완전일 수", "average_price": "평균 스프레드 (엔/kWh)" if market == "JEPX" else "선택 평균가격 (엔/kW·30분)", "quality": "완전성", "regime": "거래제도", "expected_days": "해당 제도 일수", "segment_start": "집계 시작", "segment_end": "집계 종료", "used_periods": "사용 코마 또는 블록 수"}), hide_index=True)

@@ -1,5 +1,14 @@
 import pandas as pd
-from index_app import load_fuel_prices, monthly_jepx_spreads
+from index_app import load_fuel_prices, load_jkm_prices, monthly_jepx_spreads
+
+
+def test_jpx_jkm_contract_period_and_unit():
+    prices = load_jkm_prices(("data/jkm_prices_jpx_2026.csv", 1))
+    row = prices.loc[prices.contract_month.eq("2026-04")].iloc[0]
+    assert row.evaluation_start == pd.Timestamp("2026-02-16")
+    assert row.evaluation_end == pd.Timestamp("2026-03-15")
+    assert row.comparison_month == pd.Timestamp("2026-03-01")
+    assert row.settlement_price_yen_mmbtu == 2530.8
 
 def test_fuel_prices_source_columns_and_missing_jkm():
     prices = load_fuel_prices(("data/fuel_prices_2026.csv", 1))
