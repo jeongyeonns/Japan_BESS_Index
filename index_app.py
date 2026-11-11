@@ -169,12 +169,10 @@ def main():
     st.html("""<style>
         :is(.st-key-index_intro, .st-key-jepx_explanation, .st-key-eprx_explanation),
         :is(.st-key-index_intro, .st-key-jepx_explanation, .st-key-eprx_explanation)
-        > [data-testid="stVerticalBlock"] { gap: 10px; }
+        > [data-testid="stVerticalBlock"] { gap: 12px; }
         :is(.st-key-index_intro_copy, .st-key-index_intro_notes, .st-key-eprx_notes),
         :is(.st-key-index_intro_copy, .st-key-index_intro_notes, .st-key-eprx_notes)
-        > [data-testid="stVerticalBlock"] { gap: 3px; }
-        :is(.st-key-index_intro, .st-key-jepx_explanation, .st-key-eprx_explanation)
-        [data-testid="stMarkdownContainer"] p { margin: 0; }
+        > [data-testid="stVerticalBlock"] { gap: 5px; }
         [data-testid="stMetric"] { container-type: inline-size; }
         [data-testid="stMetricValue"] {
             font-size: clamp(0.8rem, 5cqi, 2rem);
