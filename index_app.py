@@ -22,6 +22,7 @@ from utils.eprx_periods import expected_period_count, EPRX_REFORM_DATE
 BASE = Path(__file__).resolve().parent
 DATA_DIRECTORY = BASE / "data/jepx/raw"
 EPRX_DIRECTORY = BASE / "data/eprx"
+FUEL_PRICE_FILE = BASE / "data/fuel_prices_2026.csv"
 LEGACY_LABEL = "3시간 블록"
 MODERN_LABEL = "30분 코마"
 
@@ -34,6 +35,49 @@ def load_data(signatures):
 @st.cache_data
 def load_eprx_data(signatures):
     return load_all_eprx_data(EPRX_DIRECTORY)
+
+
+@st.cache_data
+def load_fuel_prices(signature):
+    if not FUEL_PRICE_FILE.exists():
+        return pd.DataFrame(columns=["month", "jkm_usd_mmbtu", "japan_lng_usd_mmbtu", "australia_coal_usd_ton"])
+    prices = pd.read_csv(FUEL_PRICE_FILE, parse_dates=["month"])
+    return prices.sort_values("month")
+
+
+def monthly_jepx_spreads(data, area):
+    dates = pd.to_datetime(data.delivery_date).dt.normalize()
+    first = dates.min() - pd.Timedelta(days=dates.min().weekday())
+    last = dates.max() - pd.Timedelta(days=dates.max().weekday())
+    _, daily = weekly_results(data, "JEPX", area, first, last)
+    daily = daily.loc[daily["valid"]].copy()
+    date_column = "date" if "date" in daily.columns else "delivery_date"
+    daily["month"] = pd.to_datetime(daily[date_column]).dt.to_period("M").dt.to_timestamp()
+    return daily.groupby("month", as_index=False)[["tb2", "tb4"]].mean()
+
+
+def fuel_comparison_charts(jepx_monthly, fuel_prices):
+    merged = jepx_monthly.merge(fuel_prices, on="month", how="outer").sort_values("month")
+    st.markdown("#### JEPX 스프레드와 발전연료 가격 비교")
+    latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "없음"
+    st.caption(f"JEPX는 지역별 월평균 스프레드, 연료가격은 World Bank Pink Sheet 월별 가격입니다. 저장된 최신 연료가격: {latest}. JKM 공개 시계열은 확인되지 않아 연결하지 않았습니다.")
+    jepx = merged.melt("month", ["tb2", "tb4"], var_name="series", value_name="value").dropna()
+    jepx["series"] = jepx["series"].map({"tb2": "JEPX TB2 (엔/kWh)", "tb4": "JEPX TB4 (엔/kWh)"})
+    gas = merged.melt("month", ["jkm_usd_mmbtu", "japan_lng_usd_mmbtu"], var_name="series", value_name="value").dropna()
+    gas["series"] = gas["series"].map({"jkm_usd_mmbtu": "JKM (USD/MMBtu)", "japan_lng_usd_mmbtu": "일본 LNG 수입가격 (USD/MMBtu)"})
+    coal = merged.melt("month", ["australia_coal_usd_ton"], var_name="series", value_name="value").dropna()
+    coal["series"] = "호주 발전용 석탄 (USD/톤)"
+    base = alt.Chart(pd.DataFrame({"month": merged.month.dropna().unique()})).encode(x=alt.X("month:T", title="월", axis=alt.Axis(format="%Y-%m")))
+    left = alt.Chart(jepx).mark_line(point=True).encode(x="month:T", y=alt.Y("value:Q", title="JEPX (엔/kWh)"), color=alt.Color("series:N", title="지표"), tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("value:Q", title="엔/kWh", format=",.2f"), "series:N"])
+    right_data = pd.concat([gas, coal], ignore_index=True)
+    right = alt.Chart(right_data).mark_line(point=True, strokeDash=[5, 3]).encode(x="month:T", y=alt.Y("value:Q", title="연료가격 (USD)", axis=alt.Axis(orient="right")), color=alt.Color("series:N", title="연료 지표"), tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("value:Q", title="USD", format=",.2f"), "series:N"])
+    st.altair_chart((left + right).resolve_scale(y="independent").properties(height=300), width="stretch")
+    relative = pd.concat([jepx.rename(columns={"value": "value"}), gas, coal], ignore_index=True)
+    relative["value"] = relative.groupby("series")["value"].transform(lambda s: s / s.dropna().iloc[0] * 100 if not s.dropna().empty else s)
+    relative = relative.dropna()
+    chart = alt.Chart(relative).mark_line(point=True).encode(x=alt.X("month:T", title="월", axis=alt.Axis(format="%Y-%m")), y=alt.Y("value:Q", title="2026년 1월 = 100", axis=alt.Axis(format=",.0f")), color=alt.Color("series:N", title="지표"), tooltip=[alt.Tooltip("month:T", title="월", format="%Y-%m"), alt.Tooltip("value:Q", title="상대지수", format=",.1f"), "series:N"])
+    st.markdown("#### 상대적 변화 추이 (2026년 1월 = 100)")
+    st.altair_chart(chart.properties(height=300), width="stretch")
 
 
 def money(value):
@@ -275,6 +319,10 @@ def main():
             else:
                 chart_history = history
             trend(chart_history, week, f"{market}_trend")
+            if market == "JEPX":
+                fuel_prices = load_fuel_prices((str(FUEL_PRICE_FILE), FUEL_PRICE_FILE.stat().st_mtime_ns) if FUEL_PRICE_FILE.exists() else None)
+                if not fuel_prices.empty:
+                    fuel_comparison_charts(monthly_jepx_spreads(data, area), fuel_prices)
             with st.expander(f"{market} 주간 수치·일별 검증"):
                 table = history.drop(columns="used_periods") if market == "JEPX" else history
                 st.dataframe(table.rename(columns={"week": "주차 시작", "week_end": "주차 종료", "series": "지표" if market == "JEPX" else "시간조건 (30분 환산 수)", "value": "Index (엔/MW/년)", "valid_days": "집계 일수", "complete_days": "완전일 수", "average_price": "평균 스프레드 (엔/kWh)" if market == "JEPX" else "선택 평균가격 (엔/kW·30분)", "quality": "완전성", "regime": "거래제도", "expected_days": "해당 제도 일수", "segment_start": "집계 시작", "segment_end": "집계 종료", "used_periods": "사용 코마 또는 블록 수"}), hide_index=True)
