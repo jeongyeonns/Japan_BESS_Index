@@ -1,5 +1,19 @@
 import pandas as pd
-from index_app import load_fuel_prices, load_jkm_prices, monthly_jepx_spreads
+from index_app import load_fuel_prices, load_jkm_prices, monthly_jepx_spreads, build_fuel_comparison_figure
+
+
+def test_fuel_figure_has_three_visible_traces_and_secondary_axis():
+    import index_app
+    jepx = pd.DataFrame({"month": pd.to_datetime(["2026-01-01", "2026-02-01"]), "tb2": [2.0, 3.0], "tb4": [3.0, 4.0]})
+    fuel = pd.DataFrame({"month": pd.to_datetime(["2026-01-01", "2026-02-01"]), "japan_lng_usd_mmbtu": [10.0, 11.0], "australia_coal_usd_ton": [100.0, 101.0]})
+    jkm = pd.DataFrame({"comparison_month": pd.to_datetime(["2026-01-01", "2026-02-01"]), "settlement_price_yen_mmbtu": [1500.0, 1600.0]})
+    fig = build_fuel_comparison_figure(jepx, fuel, jkm, "settlement_price_yen_mmbtu", "JKM 연동가격(JPX)", "엔/MMBtu")
+    assert len(fig.data) == 3
+    assert [trace.name for trace in fig.data] == ["JEPX TB2 (엔/kWh)", "JEPX TB4 (엔/kWh)", "JKM 연동가격(JPX) (엔/MMBtu)"]
+    assert list(fig.data[2].y) == [1500.0, 1600.0]
+    assert fig.data[2].yaxis == "y2"
+    assert all(trace.showlegend is not False for trace in fig.data)
+    assert list(fig.data[0].x)[0].year == 2026
 
 
 def test_jpx_jkm_contract_period_and_unit():
