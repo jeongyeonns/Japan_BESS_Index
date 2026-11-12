@@ -96,7 +96,7 @@ def build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, fuel_col
             fig.data[2].hovertemplate += "<br>계약월: %{customdata[0]}<br>평가기간: %{customdata[1]}~%{customdata[2]}"
         fig.add_shape(type="line", x0="2026-02-28", x1="2026-02-28", y0=0, y1=1, yref="paper", line=dict(color="gray", dash="dot"))
         fig.add_annotation(x="2026-02-28", y=1, yref="paper", text="2/28 중동 분쟁 시작", showarrow=False)
-    fig.update_layout(height=280, margin={"l": 65, "r": 80, "t": 20, "b": 45}, legend={"orientation": "h", "y": 1.12}, hovermode="x unified")
+    fig.update_layout(height=365, margin={"l": 65, "r": 80, "t": 45, "b": 45}, legend={"orientation": "h", "y": 1.12}, hovermode="x unified")
     fig.update_xaxes(title_text="주차 시작일 (월요일)" if weekly else "날짜", tickformat="%Y-%m-%d", nticks=8)
     values = jepx_monthly.loc[jepx_monthly.month.ge(pd.Timestamp("2026-01-01")), ["tb2", "tb4"]].stack().dropna()
     limits = [min(0, float(values.min()) * 1.1), max(1, float(values.max()) * 1.1)] if not values.empty else [0, 1]
