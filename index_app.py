@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from utils.daily_fuel_comparison import load_daily_jkm, comparison_rows, comparison_figure
 
 from utils.jepx_areas import JEPX_AREA_DISPLAY, JEPX_DETAIL_AREAS
 from utils.jepx_index import calculate_week_index
@@ -118,6 +119,37 @@ def fuel_comparison_charts(jepx_monthly, fuel_prices, jkm_prices=None):
             st.caption(f"출처: [JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/) / [World Bank Pink Sheet (LNG Japan)](https://www.worldbank.org/en/research/commodity-markets) · 최신 확보월: {latest}")
         else:
             st.caption(f"출처: [JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/) / [World Bank Pink Sheet (Coal Australian)](https://www.worldbank.org/en/research/commodity-markets) · 최신 확보월: {latest}")
+
+@st.cache_data
+def daily_jkm_data(signature):
+    return load_daily_jkm(BASE / "data/jkm_daily.csv")
+
+
+def daily_fuel_panel(daily):
+    st.markdown("### 중동 사태 전후 JEPX·JKM 가격 추이")
+    period = st.selectbox("분석 주기", ["일별", "주별"], key="daily_fuel_frequency")
+    dates = st.date_input("조회기간", value=(pd.Timestamp("2026-02-15").date(), pd.Timestamp("2026-04-30").date()), key="daily_fuel_dates")
+    if len(dates) != 2:
+        st.info("조회 시작일과 종료일을 선택해 주세요.")
+        return
+    path = BASE / "data/jkm_daily.csv"
+    try:
+        jkm = daily_jkm_data(path.stat().st_mtime_ns if path.exists() else None)
+    except (ValueError, OSError) as error:
+        st.warning(f"일별 JKM 파일을 읽을 수 없습니다: {error}")
+        jkm = pd.DataFrame(columns=["date", "price", "unit", "source", "price_type", "contract_month"])
+    if jkm.empty:
+        st.info("일별 JKM 데이터 미확보입니다. 현재는 유효한 일별 JEPX 스프레드만 표시합니다.")
+    st.caption("주별은 월요일~일요일의 실제 관측값 평균입니다. 선택기간 경계 주차는 일부 날짜만 포함됩니다. 선물은 출처·계약월별로 분리하며 월별 가격을 일별로 보충하지 않습니다.")
+    rows = comparison_rows(daily, jkm, *dates, weekly=period == "주별")
+    if not jkm.empty and not rows.unit.eq("USD/MMBtu").any():
+        st.info("선택기간에 일별 JKM 관측값이 없습니다.")
+    if rows.empty:
+        st.info("선택기간에 유효한 관측값이 없습니다.")
+    st.plotly_chart(comparison_figure(rows, *dates, weekly=period == "주별"), use_container_width=True)
+    with st.expander("일별·주별 관측값 및 집계일수"):
+        st.dataframe(rows.rename(columns={"period": "날짜 / 주차 시작", "series": "지표", "unit": "단위", "value": "가격 / 스프레드", "observed_days": "관측일 수"}), hide_index=True)
+
 
 def money(value):
     return "계산 불가" if pd.isna(value) else f"{value / 10000:,.1f}만 엔/MW/year"
@@ -359,6 +391,7 @@ def main():
                 chart_history = history
             trend(chart_history, week, f"{market}_trend")
             if market == "JEPX":
+                daily_fuel_panel(daily)
                 fuel_prices = load_fuel_prices((str(FUEL_PRICE_FILE), FUEL_PRICE_FILE.stat().st_mtime_ns) if FUEL_PRICE_FILE.exists() else None)
                 jkm_prices = load_jkm_prices((str(JKM_PRICE_FILE), JKM_PRICE_FILE.stat().st_mtime_ns) if JKM_PRICE_FILE.exists() else None)
                 if not fuel_prices.empty or not jkm_prices.empty:
