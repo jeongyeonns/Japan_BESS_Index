@@ -1,5 +1,6 @@
 """Standalone dashboard. Existing market calculation engines are unchanged."""
 from pathlib import Path
+import math
 
 import altair as alt
 import pandas as pd
@@ -103,12 +104,14 @@ def build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, fuel_col
     fig.update_yaxes(title_text="JEPX 스프레드 (엔/kWh)", secondary_y=False, range=limits, tickformat=",.2f", showgrid=True)
     fuel_values = prices[fuel_column].dropna()
     if fuel_values.empty:
-        fuel_limits = [0, 1]
+        fuel_limits, fuel_tick0, fuel_dtick = [0, 1], 0, 1
     else:
         low, high = float(fuel_values.min()), float(fuel_values.max())
         padding = max((high - low) * 0.1, abs(high) * 0.05, 0.5)
-        fuel_limits = [max(0, low - padding), high + padding]
-    fig.update_yaxes(title_text=fuel_unit, secondary_y=True, range=fuel_limits, tickmode="sync", tickformat=",.2f", showgrid=False)
+        fuel_dtick = 500 if fuel_column == "settlement_price_yen_mmbtu" and high - low <= 3500 else 1000 if fuel_column == "settlement_price_yen_mmbtu" else 1 if high - low <= 8 else 2
+        fuel_tick0 = math.floor((low - padding) / fuel_dtick) * fuel_dtick
+        fuel_limits = [fuel_tick0, math.ceil((high + padding) / fuel_dtick) * fuel_dtick]
+    fig.update_yaxes(title_text=fuel_unit, secondary_y=True, range=fuel_limits, tickmode="linear", tick0=fuel_tick0, dtick=fuel_dtick, tickformat=",.0f", showgrid=False)
     return fig
 
 

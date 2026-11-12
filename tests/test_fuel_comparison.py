@@ -81,9 +81,12 @@ def test_rendered_fuel_labels_sources_and_plotly_text(monkeypatch):
         assert unit in fig.data[2].hovertemplate
         lower, upper = fig.layout.yaxis2.range
         assert 0 < lower < min(fig.data[2].y) < max(fig.data[2].y) < upper
+        assert fig.layout.yaxis2.tickformat == ",.0f"
+        assert fig.layout.yaxis2.tick0 == lower
+        assert fig.layout.yaxis2.dtick == (500 if column == "settlement_price_yen_mmbtu" else 1)
     assert not any("오른쪽 Y축 범위를 조정했습니다." in text for text in texts)
     assert all(fig.layout.height == 548 for fig in figures)
-    assert all(fig.layout.yaxis2.tickmode == "sync" for fig in figures)
+    assert all(fig.layout.yaxis2.tickmode == "linear" for fig in figures)
     assert all(fig.layout.yaxis.showgrid is True and fig.layout.yaxis2.showgrid is False for fig in figures)
     assert all("?" not in text and "\ufffd" not in text and "{label}" not in text for text in texts)
     Path(index_app.__file__).read_bytes().decode("utf-8", errors="strict")
