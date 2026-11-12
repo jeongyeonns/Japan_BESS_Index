@@ -1,0 +1,30 @@
+name: JPX JKM manual review reminder
+
+on:
+  schedule:
+    # 09:00 JST on the 18th and 23rd of each month.
+    - cron: "0 0 18,23 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Show stored JKM status
+        run: python -m utils.jkm_jpx_manual_update --status
+      - name: Manual review required
+        shell: bash
+        run: |
+          {
+            echo "## JPX JKM manual review"
+            echo "JPX data is not downloaded by this workflow. JPX terms prohibit collection, secondary use and redistribution without permission."
+            echo "Review the official JPX page manually under an authorised process, then run the validated manual merge tool with the approved input CSV."
+            echo "Source: https://www.jpx.co.jp/markets/derivatives/special-quotation/"
+          } >> "$GITHUB_STEP_SUMMARY"
