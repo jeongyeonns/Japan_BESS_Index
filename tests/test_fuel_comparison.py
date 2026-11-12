@@ -37,10 +37,10 @@ def test_rendered_fuel_labels_sources_and_plotly_text(monkeypatch):
     monkeypatch.setattr(index_app.st, "selectbox", lambda *args, **kwargs: "\uc8fc\ubcc4")
     index_app.fuel_comparison_charts(daily, fuel, jkm)
     assert texts[0] == "### JEPX 스프레드와 발전연료 가격 추이 비교"
-    assert texts[1] == '\u203b JKM \uc5f0\ub3d9\uac00\uaca9, \uc77c\ubcf8 LNG \uc218\uc785\uac00\uaca9, \ud638\uc8fc \ubc1c\uc804\uc6a9 \uc11d\ud0c4\uac00\uaca9\uc740 \ud604\uc7ac \uc6d4\ubcc4 \uc790\ub8cc\ub9cc \ud655\ubcf4\ub418\uc5b4 \uc788\uc2b5\ub2c8\ub2e4.  \n\ub530\ub77c\uc11c JEPX \uc2a4\ud504\ub808\ub4dc\ub9cc \uc120\ud0dd\ud55c \uc8fc\uae30\uc5d0 \ub530\ub77c \ud45c\uc2dc\ud558\uba70, \uc5f0\ub8cc\uac00\uaca9\uc740 \uc6d4\ubcc4 \uae30\uc900\uc73c\ub85c \uc81c\uacf5\ud569\ub2c8\ub2e4.'
-    labels = ["JKM 연동가격(JPX)", "일본 LNG 수입가격", "호주 발전용 석탄가격"]
-    units = ["엔/MMBtu", "USD/MMBtu", "USD/톤"]
-    assert len(figures) == 3
+    assert texts[1] == '\u203b JKM \uc5f0\ub3d9\uac00\uaca9\uacfc \uc77c\ubcf8 LNG \uc218\uc785\uac00\uaca9\uc740 \ud604\uc7ac \uc6d4\ubcc4 \uc790\ub8cc\ub9cc \ud655\ubcf4\ub418\uc5b4 \uc788\uc2b5\ub2c8\ub2e4.  \n\ub530\ub77c\uc11c JEPX \uc2a4\ud504\ub808\ub4dc\ub9cc \uc120\ud0dd\ud55c \uc8fc\uae30\uc5d0 \ub530\ub77c \ud45c\uc2dc\ud558\uba70, \uc5f0\ub8cc\uac00\uaca9\uc740 \uc6d4\ubcc4 \uae30\uc900\uc73c\ub85c \uc81c\uacf5\ud569\ub2c8\ub2e4.'
+    labels = ["JKM 연동가격(JPX)", "일본 LNG 수입가격"]
+    units = ["엔/MMBtu", "USD/MMBtu"]
+    assert len(figures) == 2
     for fig, label, unit in zip(figures, labels, units):
         assert f"#### {label}" in texts
         assert [trace.name for trace in fig.data] == ["JEPX TB2 (엔/kWh)", "JEPX TB4 (엔/kWh)", f"{label} ({unit})"]
@@ -52,17 +52,16 @@ def test_rendered_fuel_labels_sources_and_plotly_text(monkeypatch):
         payload = fig.to_json()
         assert "?" not in payload and "\ufffd" not in payload
     sources = [text for text in texts if text.startswith("출처:")]
-    assert len(sources) == 3
+    assert len(sources) == 2
     assert all("[JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/)" in text for text in sources)
     assert "[JPX LNG (Platts JKM) 선물 최종정산가격](https://www.jpx.co.jp/markets/derivatives/special-quotation/)" in sources[0]
-    for text, label in zip(sources[1:], ["LNG Japan", "Coal Australian"]):
-        assert f"[World Bank Pink Sheet ({label})](https://www.worldbank.org/en/research/commodity-markets)" in text
+    assert "[World Bank Pink Sheet (LNG Japan)](https://www.worldbank.org/en/research/commodity-markets)" in sources[1]
     assert any("평가기간 종료월을 기준으로 표시한 값입니다." in text for text in texts)
-    assert len([text for text in texts if "  \n" in text]) == 4
+    assert len([text for text in texts if "  \n" in text]) == 3
     assert all("최신 확보월" in text and "2026-10" in text for text in sources)
     assert all(fig.layout.yaxis.range == figures[0].layout.yaxis.range for fig in figures)
-    columns = ["settlement_price_yen_mmbtu", "japan_lng_usd_mmbtu", "australia_coal_usd_ton"]
-    for fig, column, color, unit in zip(figures, columns, ["#DC2626", "#7C3AED", "#EA580C"], units):
+    columns = ["settlement_price_yen_mmbtu", "japan_lng_usd_mmbtu"]
+    for fig, column, color, unit in zip(figures, columns, ["#DC2626", "#7C3AED"], units):
         prices = jkm.rename(columns={"comparison_month": "month"}) if column == columns[0] else fuel
         expected = prices.loc[prices.month.ge("2026-01-01") & prices[column].notna()].sort_values("month")
         import numpy as np
@@ -80,6 +79,9 @@ def test_rendered_fuel_labels_sources_and_plotly_text(monkeypatch):
         assert [t.line.dash for t in fig.data] == ["solid", "solid", "dot"]
         assert fig.data[2].line.width == 3 and fig.data[2].marker.size == 7
         assert unit in fig.data[2].hovertemplate
+        lower, upper = fig.layout.yaxis2.range
+        assert 0 < lower < min(fig.data[2].y) < max(fig.data[2].y) < upper
+    assert sum("오른쪽 Y축 범위를 조정했습니다." in text for text in texts) == 2
     assert all("?" not in text and "\ufffd" not in text and "{label}" not in text for text in texts)
     Path(index_app.__file__).read_bytes().decode("utf-8", errors="strict")
 
@@ -116,3 +118,4 @@ def test_fuel_choice_has_distinct_unit_and_no_relative_series():
     source = open("index_app.py", encoding="utf-8").read()
     assert "상대적 변화 추이" not in source
     assert "USD/MMBtu" in source and "fuel_comparison_charts" in source
+    assert "호주 발전용 석탄가격" not in source[source.index("def fuel_comparison_charts"):source.index("def money")]

@@ -101,7 +101,14 @@ def build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, fuel_col
     values = jepx_monthly.loc[jepx_monthly.month.ge(pd.Timestamp("2026-01-01")), ["tb2", "tb4"]].stack().dropna()
     limits = [min(0, float(values.min()) * 1.1), max(1, float(values.max()) * 1.1)] if not values.empty else [0, 1]
     fig.update_yaxes(title_text="JEPX 스프레드 (엔/kWh)", secondary_y=False, range=limits, tickformat=",.2f")
-    fig.update_yaxes(title_text=fuel_unit, secondary_y=True, rangemode="tozero", tickformat=",.2f")
+    fuel_values = prices[fuel_column].dropna()
+    if fuel_values.empty:
+        fuel_limits = [0, 1]
+    else:
+        low, high = float(fuel_values.min()), float(fuel_values.max())
+        padding = max((high - low) * 0.1, abs(high) * 0.05, 0.5)
+        fuel_limits = [max(0, low - padding), high + padding]
+    fig.update_yaxes(title_text=fuel_unit, secondary_y=True, range=fuel_limits, tickformat=",.2f")
     return fig
 
 
@@ -109,14 +116,13 @@ def fuel_comparison_charts(daily, fuel_prices, jkm_prices=None):
     st.markdown("### JEPX 스프레드와 발전연료 가격 추이 비교")
     period = st.selectbox("분석 주기", ["주별", "일별"], key="fuel_frequency")
     jepx_monthly = comparison_jepx_periods(daily, weekly=period == "주별")
-    st.caption("※ JKM 연동가격, 일본 LNG 수입가격, 호주 발전용 석탄가격은 현재 월별 자료만 확보되어 있습니다.  \n따라서 JEPX 스프레드만 선택한 주기에 따라 표시하며, 연료가격은 월별 기준으로 제공합니다.")
+    st.caption("※ JKM 연동가격과 일본 LNG 수입가격은 현재 월별 자료만 확보되어 있습니다.  \n따라서 JEPX 스프레드만 선택한 주기에 따라 표시하며, 연료가격은 월별 기준으로 제공합니다.")
     latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "없음"
     jkm_latest = jkm_prices.comparison_month.max().strftime("%Y-%m") if jkm_prices is not None and not jkm_prices.empty else "없음"
     st.caption(f"World Bank Pink Sheet 최신 갱신월: {latest} · JPX JKM 최신 평가기간 종료월: {jkm_latest}")
     charts = [
         ("JKM 연동가격(JPX)", "settlement_price_yen_mmbtu", "엔/MMBtu"),
         ("일본 LNG 수입가격", "japan_lng_usd_mmbtu", "USD/MMBtu"),
-        ("호주 발전용 석탄가격", "australia_coal_usd_ton", "USD/톤"),
     ]
     for label, column, unit in charts:
         fig = build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, column, label, unit, weekly=period == "주별")
@@ -124,16 +130,14 @@ def fuel_comparison_charts(daily, fuel_prices, jkm_prices=None):
         descriptions = {
             "settlement_price_yen_mmbtu": "JKM은 동북아 LNG 현물시장의 가격지표로, 중동 사태와 같은 국제 LNG 공급 충격을 빠르게 반영하는 지표입니다.  \n본 그래프는 JKM 현물가격 자체가 아닌 JPX의 JKM 연동 선물 최종정산가격이며, 평가기간 종료월을 기준으로 표시한 값입니다.",
             "japan_lng_usd_mmbtu": "일본에 실제 도착한 LNG의 평균 수입가격으로, 장기계약 물량과 유가 연동 가격 등이 반영된 값입니다.  \nJKM과 달리 현물시장 가격 급등이 수입가격에 반영되기까지 시차가 있어, 두 가격의 움직임이 다르게 나타날 수 있는 지표입니다.",
-            "australia_coal_usd_ton": "국제 발전용 석탄가격의 흐름을 보여주는 지표로, LNG와 함께 일본 화력발전의 연료비 변화를 살펴보기 위한 가격입니다.  \n일본 발전사가 실제 지급한 석탄 구매가격이 아닌 국제 벤치마크 가격입니다.",
         }
         st.caption(descriptions[column])
         st.plotly_chart(fig, use_container_width=True)
+        st.caption("※ 발전연료 가격의 변동을 쉽게 확인할 수 있도록 오른쪽 Y축 범위를 조정했습니다.")
         if column == "settlement_price_yen_mmbtu":
             st.caption(f"출처: [JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/) / [JPX LNG (Platts JKM) 선물 최종정산가격](https://www.jpx.co.jp/markets/derivatives/special-quotation/) · 최신 확보월(평가기간 종료월): {jkm_latest}")
         elif column == "japan_lng_usd_mmbtu":
             st.caption(f"출처: [JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/) / [World Bank Pink Sheet (LNG Japan)](https://www.worldbank.org/en/research/commodity-markets) · 최신 확보월: {latest}")
-        else:
-            st.caption(f"출처: [JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/) / [World Bank Pink Sheet (Coal Australian)](https://www.worldbank.org/en/research/commodity-markets) · 최신 확보월: {latest}")
 
 def money(value):
     return "계산 불가" if pd.isna(value) else f"{value / 10000:,.1f}만 엔/MW/year"
@@ -205,10 +209,11 @@ def trend(history, selected_week, key, procurement=None):
     if is_jepx:
         chart = chart.properties(title="주차별 차익거래 수익기회")
     else:
-        st.caption("2026년 3월 14일 거래제도 변경: 3시간 블록 → 30분 코마")
+        st.markdown("#### 주차별 조정력 수익기회")
+        st.caption("3/14 제도 변경: 3시간 블록 → 30분 코마")
         st.caption("점선 왼쪽: 기존 3시간 블록 · 점선 오른쪽: 변경 후 30분 코마")
         reform = alt.Chart(pd.DataFrame({"date": [EPRX_REFORM_DATE], "label": ["3/14 제도 변경"]})).encode(x="date:T")
-        chart = (line + rule + reform.mark_rule(color="#a66a36", strokeDash=[6, 3]) + reform.mark_text(align="left", dx=5, dy=8, baseline="top", color="#a66a36").encode(y=alt.value(0), text="label:N")).properties(height=280, title="주차별 조정력 수익기회")
+        chart = (line + rule + reform.mark_rule(color="#a66a36", strokeDash=[6, 3])).properties(height=300)
         st.caption("3/14부터 3시간 블록·주간 거래가 30분 코마·전일 거래로 변경된 자료입니다. 선은 제도별로 분리되어 있으며, 전후 차이는 가격과 제도 변경의 영향을 함께 포함한 값입니다.")
         if procurement is not None:
             volume = procurement.sort_values(["regime", "week"]).copy()
@@ -219,13 +224,14 @@ def trend(history, selected_week, key, procurement=None):
             color = alt.Color("series:N", title="지표", scale=scale, legend=legend)
             # Keep both index rules on the left axis; resolve the volume axis separately.
             line = line.encode(color=color)
-            left = line + rule + reform.mark_rule(color="#a66a36", strokeDash=[6, 3]) + reform.mark_text(align="left", dx=5, dy=8, baseline="top", color="#a66a36").encode(y=alt.value(0), text="label:N")
+            left = line + rule + reform.mark_rule(color="#a66a36", strokeDash=[6, 3])
             right = alt.Chart(volume).mark_line(strokeDash=[4, 4], point=alt.OverlayMarkDef(shape="circle")).encode(
                 x=alt.X("week:T", title="주차 시작일 (월요일)", axis=alt.Axis(format="%-m/%-d")),
                 y=alt.Y("procurement:Q", title="주간 평균 모집량 (MW)", axis=alt.Axis(orient="right", format=",.2f"), scale=alt.Scale(zero=True)),
                 color=color, detail="segment:N",
                 tooltip=[alt.Tooltip("week:T", title="주차 시작", format="%Y-%m-%d"), alt.Tooltip("procurement:Q", title="주간 평균 모집량 (MW)", format=",.4f"), alt.Tooltip("regime:N", title="거래제도"), alt.Tooltip("segment_start:T", title="집계 시작"), alt.Tooltip("segment_end:T", title="집계 종료"), alt.Tooltip("procurement_periods:Q", title="모집량 관측구간"), alt.Tooltip("expected_periods:Q", title="기대구간")])
-            chart = alt.layer(left, right).resolve_scale(y="independent").properties(height=280, title="주차별 조정력 수익기회")
+            chart = alt.layer(left, right).resolve_scale(y="independent").properties(height=300)
+        chart = chart.configure_legend(orient="top", direction="horizontal", title=None, columns=5, offset=8)
     st.altair_chart(chart, width="stretch", key=key)
     if not is_jepx and procurement is not None:
         st.caption("※ 모집량은 TSO 조달지역 기준이며, 수익기회 Index는 전원 소재지역별 최고 낙찰가격을 기준으로 계산합니다.")

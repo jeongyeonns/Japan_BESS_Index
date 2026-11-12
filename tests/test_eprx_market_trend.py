@@ -67,6 +67,10 @@ def test_actual_csv_tso_column_and_panel(monkeypatch):
     assert right["encoding"]["color"]["scale"]["range"][-1] == "#808080"
     assert chart.layer[1].data.procurement.tolist() == rows.procurement.tolist()
     assert sorted(chart.layer[0].layer[0].data.value) == sorted(history.value)
+    assert "#### 주차별 조정력 수익기회" in texts
+    assert any("3/14 제도 변경" in text for text in texts)
+    assert spec["config"]["legend"]["orient"] == "top"
+    assert spec["config"]["legend"]["direction"] == "horizontal"
 
 
 def test_combined_regime_and_missing_segments(monkeypatch):
@@ -75,10 +79,17 @@ def test_combined_regime_and_missing_segments(monkeypatch):
     first, last = pd.Timestamp("2026-03-09"), pd.Timestamp("2026-03-23")
     rows = weekly_market_trend(data, "Tokyo", first, last)
     history, _ = index_app.weekly_results(data, "EPRX", "Tokyo", first, last)
-    charts = []
+    charts, texts = [], []
+    monkeypatch.setattr(index_app.st, "caption", lambda text: texts.append(text))
+    monkeypatch.setattr(index_app.st, "markdown", lambda text: texts.append(text))
     monkeypatch.setattr(index_app.st, "altair_chart", lambda chart, **k: charts.append(chart))
     index_app.trend(history, first, "EPRX_trend", rows)
     volume = charts[0].layer[1].data
     assert volume.loc[volume.week.eq(first), "segment"].nunique() == 2
     assert volume.loc[volume.week.gt(first), "procurement"].isna().all()
+    assert "#### 주차별 조정력 수익기회" in texts
+    assert any("3/14 제도 변경" in text for text in texts)
+    spec = charts[0].to_dict()
+    assert spec["config"]["legend"]["orient"] == "top"
+    assert "text" not in str(spec["layer"][0])
     assert "EPRX 1차 조정력 주차별 시장 동향" not in open(index_app.__file__, encoding="utf-8").read()

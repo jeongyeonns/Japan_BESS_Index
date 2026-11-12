@@ -52,12 +52,12 @@ fuel_comparison_charts(daily, load_fuel_prices(("test", 1)), load_jkm_prices(("t
 ''').run(timeout=30)
     assert not app.exception
     assert app.selectbox[0].value == "\uc8fc\ubcc4"
-    assert len(app.get("plotly_chart")) == 3
+    assert len(app.get("plotly_chart")) == 2
     assert len(app.date_input) == 0
     assert all("???" not in v.value and "\ufffd" not in v.value for v in list(app.markdown) + list(app.caption))
     app.selectbox[0].select("\uc77c\ubcc4").run(timeout=30)
     assert not app.exception
-    assert len(app.get("plotly_chart")) == 3
+    assert len(app.get("plotly_chart")) == 2
 
 
 def test_integrated_frequency_uses_valid_days_without_repeating_fuel():
