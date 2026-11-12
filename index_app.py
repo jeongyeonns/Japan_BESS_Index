@@ -293,8 +293,6 @@ def main():
         with st.container(key="index_intro_copy"):
             st.markdown("Modo Energy는 영국·독일 등 해외 전력시장의 ESS 수익성을 MW당 연간 금액으로 보여주는 Index를 제공합니다.")
             st.markdown("일본은 해당 Index의 공개 대상에 포함되어 있지 않아, 본 앱에서는 JEPX·EPRX 시장가격을 활용해 일본의 지역별·주차별 수익기회를 비교할 수 있도록 했습니다.")
-            st.markdown("사용자가 선택한 주차의 시장가격 수준이 1년간 유지된다고 가정하여, 해당 주차의 일평균 수익기회를 MW당 연간 금액으로 환산합니다.")
-            st.markdown("이를 통해 특정 주차의 시장 수익성을 확인하고, 지역별·주차별 수익기회가 어떻게 달라지는지 비교할 수 있습니다.")
         with st.container(key="index_intro_notes"):
             st.caption("※ 실제 ESS 운영수익이 아닌, 시장가격을 바탕으로 계산한 이론적 수익기회입니다.")
             st.caption("[Modo Energy 공식 벤치마크](https://modoenergy.com/product/benchmarks)")
@@ -340,6 +338,7 @@ def main():
     weeks = list(pd.date_range(first, last, freq="W-MON"))[::-1]
     controls = st.columns(2)
     week = controls[0].selectbox("분석 주차 (월~일)", weeks, format_func=lambda d: f"{d:%Y-%m-%d} ~ {d + pd.Timedelta(days=6):%Y-%m-%d}")
+    controls[0].caption("사용자가 선택한 주차의 시장가격 수준이 1년간 유지된다고 가정하여, 해당 주차의 일평균 수익기회를 MW당 연간 금액으로 환산합니다.  \n이를 통해 특정 주차의 시장 수익성을 확인하고, 지역별·주차별 수익기회가 어떻게 달라지는지 비교할 수 있습니다.")
     available = set().union(*(set(d.area) for d in sources.values()))
     areas = [a for a in JEPX_DETAIL_AREAS if a in available]
     if not areas:
