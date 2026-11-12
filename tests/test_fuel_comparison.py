@@ -29,17 +29,22 @@ def test_rendered_fuel_labels_sources_and_plotly_text(monkeypatch):
     fuel = load_fuel_prices(("labels", 1))
     jkm = load_jkm_prices(("labels", 1))
     raw, *_ = index_app.load_all_jepx_data(index_app.DATA_DIRECTORY)
-    jepx = monthly_jepx_spreads(raw, "Tokyo")
-    index_app.fuel_comparison_charts(jepx, fuel, jkm)
+    dates = raw.delivery_date
+    first = dates.min() - pd.Timedelta(days=dates.min().weekday())
+    last = dates.max() - pd.Timedelta(days=dates.max().weekday())
+    _, daily = index_app.weekly_results(raw, "JEPX", "Tokyo", first, last)
+    jepx = index_app.comparison_jepx_periods(daily)
+    monkeypatch.setattr(index_app.st, "selectbox", lambda *args, **kwargs: "\uc8fc\ubcc4")
+    index_app.fuel_comparison_charts(daily, fuel, jkm)
     assert texts[0] == "### JEPX 스프레드와 발전연료 가격 추이 비교"
-    assert texts[1] == "JEPX의 월평균 스프레드와 주요 발전연료 가격이 비슷한 흐름을 보이는지 비교합니다."
+    assert texts[1] == "JEPX\ub294 \uc120\ud0dd\ud55c \uc8fc\uae30, \ubc1c\uc804\uc5f0\ub8cc\ub294 \uc6d4\ubcc4 \uad00\uce21\uac00\uaca9 \uae30\uc900\uc785\ub2c8\ub2e4."
     labels = ["JKM 연동가격(JPX)", "일본 LNG 수입가격", "호주 발전용 석탄가격"]
     units = ["엔/MMBtu", "USD/MMBtu", "USD/톤"]
     assert len(figures) == 3
     for fig, label, unit in zip(figures, labels, units):
         assert f"#### {label}" in texts
         assert [trace.name for trace in fig.data] == ["JEPX TB2 (엔/kWh)", "JEPX TB4 (엔/kWh)", f"{label} ({unit})"]
-        assert fig.layout.xaxis.title.text == "월"
+        assert fig.layout.xaxis.title.text == "\uc8fc\ucc28 \uc2dc\uc791\uc77c (\uc6d4\uc694\uc77c)"
         assert fig.layout.yaxis.title.text == "JEPX 스프레드 (엔/kWh)"
         assert fig.layout.yaxis2.title.text == unit
         assert fig.data[2].yaxis == "y2"
@@ -59,11 +64,17 @@ def test_rendered_fuel_labels_sources_and_plotly_text(monkeypatch):
     columns = ["settlement_price_yen_mmbtu", "japan_lng_usd_mmbtu", "australia_coal_usd_ton"]
     for fig, column, color, unit in zip(figures, columns, ["#DC2626", "#7C3AED", "#EA580C"], units):
         prices = jkm.rename(columns={"comparison_month": "month"}) if column == columns[0] else fuel
-        expected = jepx.merge(prices[["month", column]], on="month").dropna(subset=["tb2", "tb4", column])
-        expected = expected.loc[expected.month.ge("2026-01-01")].sort_values("month")
-        for trace, field in zip(fig.data, ["tb2", "tb4", column]):
-            assert list(trace.y) == expected[field].tolist()
-            assert list(pd.to_datetime(trace.x)) == expected.month.tolist()
+        expected = prices.loc[prices.month.ge("2026-01-01") & prices[column].notna()].sort_values("month")
+        import numpy as np
+        for trace, field in zip(fig.data[:2], ["tb2", "tb4"]):
+            np.testing.assert_allclose(trace.y, jepx[field], equal_nan=True)
+            assert list(pd.to_datetime(trace.x)) == jepx.month.tolist()
+        assert list(fig.data[2].y) == expected[column].tolist()
+        assert list(pd.to_datetime(fig.data[2].x)) == expected.month.tolist()
+        assert len(fig.layout.shapes) == (1 if column == columns[0] else 0)
+        if column == columns[0]:
+            assert fig.layout.shapes[0].x0 == "2026-02-28"
+            assert fig.layout.shapes[0].x1 == "2026-02-28"
         assert [t.yaxis for t in fig.data] == ["y", "y", "y2"]
         assert [t.line.color for t in fig.data] == ["#2563EB", "#0F766E", color]
         assert [t.line.dash for t in fig.data] == ["solid", "solid", "dot"]

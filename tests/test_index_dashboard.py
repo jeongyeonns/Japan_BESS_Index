@@ -75,7 +75,7 @@ def test_actual_dashboard_navigation_and_missing_week():
     assert not any(c.value == "엔/MW/년" for c in app.caption)
     assert all(m.value == "계산 불가" or m.value.endswith("만 엔/MW/year") for m in app.metric)
     assert len(app.get("vega_lite_chart")) == 3
-    assert len(app.get("plotly_chart")) == 4
+    assert len(app.get("plotly_chart")) == 3
     for area in ("Tokyo", "Chubu", "Kyushu"):
         app.selectbox[1].select(area)
         app.selectbox[0].select(pd.Timestamp("2026-11-02")).run(timeout=60)

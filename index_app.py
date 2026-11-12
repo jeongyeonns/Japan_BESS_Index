@@ -6,7 +6,6 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from utils.daily_fuel_comparison import load_daily_jkm, comparison_rows, comparison_figure
 from utils.eprx_market_trend import weekly_market_trend
 
 from utils.jepx_areas import JEPX_AREA_DISPLAY, JEPX_DETAIL_AREAS
@@ -70,22 +69,35 @@ def monthly_jepx_spreads(data, area):
     return daily.groupby("month", as_index=False)[["tb2", "tb4"]].mean()
 
 
-def build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, fuel_column, fuel_label, fuel_unit):
-    merged = jepx_monthly.merge(fuel_prices, on="month", how="outer")
-    if jkm_prices is not None and not jkm_prices.empty:
-        jkm = jkm_prices[["comparison_month", "settlement_price_yen_mmbtu"]].rename(columns={"comparison_month": "month"})
-        merged = merged.merge(jkm, on="month", how="outer")
-    common = merged.loc[(merged.month >= pd.Timestamp("2026-01-01")) & merged.tb2.notna() & merged.tb4.notna() & merged[fuel_column].notna()].sort_values("month")
+def comparison_jepx_periods(daily, weekly=True):
+    data = daily.loc[daily.delivery_date.ge(pd.Timestamp("2026-01-01"))].copy()
+    data.loc[~data.valid, ["tb2", "tb4"]] = float("nan")
+    data["month"] = data.delivery_date - pd.to_timedelta(data.delivery_date.dt.weekday, unit="D") if weekly else data.delivery_date
+    return data.groupby("month", as_index=False)[["tb2", "tb4"]].mean()
+
+
+def build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, fuel_column, fuel_label, fuel_unit, weekly=True):
+    common = jepx_monthly.sort_values("month")
+    prices = (jkm_prices.rename(columns={"comparison_month": "month"}) if jkm_prices is not None else pd.DataFrame(columns=["month", fuel_column])) if fuel_column == "settlement_price_yen_mmbtu" else fuel_prices
+    prices = prices.loc[prices.month.ge(pd.Timestamp("2026-01-01")) & prices[fuel_column].notna()].sort_values("month")
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     yen = "엔"
     fig.add_trace(go.Scatter(x=common.month, y=common.tb2, name="JEPX TB2 (" + yen + "/kWh)", mode="lines+markers", line={"color": "#2563EB", "dash": "solid"}), secondary_y=False)
     fig.add_trace(go.Scatter(x=common.month, y=common.tb4, name="JEPX TB4 (" + yen + "/kWh)", mode="lines+markers", line={"color": "#0F766E", "dash": "solid"}), secondary_y=False)
     fuel_color = {"settlement_price_yen_mmbtu": "#DC2626", "japan_lng_usd_mmbtu": "#7C3AED", "australia_coal_usd_ton": "#EA580C"}[fuel_column]
-    fig.add_trace(go.Scatter(x=common.month, y=common[fuel_column], name=f"{fuel_label} ({fuel_unit})", mode="lines+markers", marker={"size": 7}, line={"color": fuel_color, "dash": "dot", "width": 3}), secondary_y=True)
+    fig.add_trace(go.Scatter(x=prices.month, y=prices[fuel_column], name=f"{fuel_label} ({fuel_unit})", mode="lines+markers", connectgaps=False, marker={"size": 7}, line={"color": fuel_color, "dash": "dot", "width": 3}), secondary_y=True)
     for trace, unit in zip(fig.data, ["엔/kWh", "엔/kWh", fuel_unit]):
-        trace.hovertemplate = "%{x|%Y-%m}<br>%{y:,.4f} " + unit + "<extra>%{fullData.name}</extra>"
+        trace.hovertemplate = "%{x|%Y-%m-%d}<br>%{y:,.4f} " + unit + "<extra>%{fullData.name}</extra>"
+        trace.connectgaps = False
+    fig.data[2].hovertemplate = "월별 관측기간: %{x|%Y-%m}<br>%{y:,.4f} " + fuel_unit + "<extra>%{fullData.name}</extra>"
+    if fuel_column == "settlement_price_yen_mmbtu":
+        if {"contract_month", "evaluation_start", "evaluation_end"}.issubset(prices.columns):
+            fig.data[2].customdata = prices[["contract_month", "evaluation_start", "evaluation_end"]].astype(str).values
+            fig.data[2].hovertemplate += "<br>계약월: %{customdata[0]}<br>평가기간: %{customdata[1]}~%{customdata[2]}"
+        fig.add_shape(type="line", x0="2026-02-28", x1="2026-02-28", y0=0, y1=1, yref="paper", line=dict(color="gray", dash="dot"))
+        fig.add_annotation(x="2026-02-28", y=1, yref="paper", text="2/28 중동 분쟁 시작", showarrow=False)
     fig.update_layout(height=280, margin={"l": 65, "r": 80, "t": 20, "b": 45}, legend={"orientation": "h", "y": 1.12}, hovermode="x unified")
-    fig.update_xaxes(title_text="월", tickformat="%Y-%m", dtick="M1")
+    fig.update_xaxes(title_text="주차 시작일 (월요일)" if weekly else "날짜", tickformat="%Y-%m-%d", nticks=8)
     values = jepx_monthly.loc[jepx_monthly.month.ge(pd.Timestamp("2026-01-01")), ["tb2", "tb4"]].stack().dropna()
     limits = [min(0, float(values.min()) * 1.1), max(1, float(values.max()) * 1.1)] if not values.empty else [0, 1]
     fig.update_yaxes(title_text="JEPX 스프레드 (엔/kWh)", secondary_y=False, range=limits, tickformat=",.2f")
@@ -93,9 +105,12 @@ def build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, fuel_col
     return fig
 
 
-def fuel_comparison_charts(jepx_monthly, fuel_prices, jkm_prices=None):
+def fuel_comparison_charts(daily, fuel_prices, jkm_prices=None):
     st.markdown("### JEPX 스프레드와 발전연료 가격 추이 비교")
-    st.caption("JEPX의 월평균 스프레드와 주요 발전연료 가격이 비슷한 흐름을 보이는지 비교합니다.")
+    period = st.selectbox("분석 주기", ["주별", "일별"], key="fuel_frequency")
+    jepx_monthly = comparison_jepx_periods(daily, weekly=period == "주별")
+    st.caption("JEPX는 선택한 주기, 발전연료는 월별 관측가격 기준입니다.")
+    st.caption("연료가격의 X축 위치는 해당 월을 나타내며 특정 날짜의 일별 가격이 아닙니다.")
     latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "없음"
     jkm_latest = jkm_prices.comparison_month.max().strftime("%Y-%m") if jkm_prices is not None and not jkm_prices.empty else "없음"
     st.caption(f"World Bank Pink Sheet 최신 갱신월: {latest} · JPX JKM 최신 평가기간 종료월: {jkm_latest}")
@@ -105,7 +120,7 @@ def fuel_comparison_charts(jepx_monthly, fuel_prices, jkm_prices=None):
         ("호주 발전용 석탄가격", "australia_coal_usd_ton", "USD/톤"),
     ]
     for label, column, unit in charts:
-        fig = build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, column, label, unit)
+        fig = build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, column, label, unit, weekly=period == "주별")
         st.markdown(f"#### {label}")
         descriptions = {
             "settlement_price_yen_mmbtu": "JKM은 동북아 LNG 현물시장의 가격지표로, 중동 사태와 같은 국제 LNG 공급 충격을 빠르게 반영하는 지표입니다.  \n본 그래프는 JKM 현물가격 자체가 아닌 JPX의 JKM 연동 선물 최종정산가격이며, 평가기간 종료월을 기준으로 표시한 값입니다.",
@@ -120,37 +135,6 @@ def fuel_comparison_charts(jepx_monthly, fuel_prices, jkm_prices=None):
             st.caption(f"출처: [JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/) / [World Bank Pink Sheet (LNG Japan)](https://www.worldbank.org/en/research/commodity-markets) · 최신 확보월: {latest}")
         else:
             st.caption(f"출처: [JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/) / [World Bank Pink Sheet (Coal Australian)](https://www.worldbank.org/en/research/commodity-markets) · 최신 확보월: {latest}")
-
-@st.cache_data
-def daily_jkm_data(signature):
-    return load_daily_jkm(BASE / "data/jkm_daily.csv")
-
-
-def daily_fuel_panel(daily):
-    st.markdown("### 중동 사태 전후 JEPX·JKM 가격 추이")
-    period = st.selectbox("분석 주기", ["일별", "주별"], key="daily_fuel_frequency")
-    dates = st.date_input("조회기간", value=(pd.Timestamp("2026-02-15").date(), pd.Timestamp("2026-04-30").date()), key="daily_fuel_dates")
-    if len(dates) != 2:
-        st.info("조회 시작일과 종료일을 선택해 주세요.")
-        return
-    path = BASE / "data/jkm_daily.csv"
-    try:
-        jkm = daily_jkm_data(path.stat().st_mtime_ns if path.exists() else None)
-    except (ValueError, OSError) as error:
-        st.warning(f"일별 JKM 파일을 읽을 수 없습니다: {error}")
-        jkm = pd.DataFrame(columns=["date", "price", "unit", "source", "price_type", "contract_month"])
-    if jkm.empty:
-        st.info("일별 JKM 데이터 미확보입니다. 현재는 유효한 일별 JEPX 스프레드만 표시합니다.")
-    st.caption("주별은 월요일~일요일의 실제 관측값 평균입니다. 선택기간 경계 주차는 일부 날짜만 포함됩니다. 선물은 출처·계약월별로 분리하며 월별 가격을 일별로 보충하지 않습니다.")
-    rows = comparison_rows(daily, jkm, *dates, weekly=period == "주별")
-    if not jkm.empty and not rows.unit.eq("USD/MMBtu").any():
-        st.info("선택기간에 일별 JKM 관측값이 없습니다.")
-    if rows.empty:
-        st.info("선택기간에 유효한 관측값이 없습니다.")
-    st.plotly_chart(comparison_figure(rows, *dates, weekly=period == "주별"), use_container_width=True)
-    with st.expander("일별·주별 관측값 및 집계일수"):
-        st.dataframe(rows.rename(columns={"period": "날짜 / 주차 시작", "series": "지표", "unit": "단위", "value": "가격 / 스프레드", "observed_days": "관측일 수"}), hide_index=True)
-
 
 def money(value):
     return "계산 불가" if pd.isna(value) else f"{value / 10000:,.1f}만 엔/MW/year"
@@ -419,11 +403,10 @@ def main():
             procurement = cached_market_trend(data, area, first, last) if market == "EPRX" else None
             trend(chart_history, week, f"{market}_trend", procurement)
             if market == "JEPX":
-                daily_fuel_panel(daily)
                 fuel_prices = load_fuel_prices((str(FUEL_PRICE_FILE), FUEL_PRICE_FILE.stat().st_mtime_ns) if FUEL_PRICE_FILE.exists() else None)
                 jkm_prices = load_jkm_prices((str(JKM_PRICE_FILE), JKM_PRICE_FILE.stat().st_mtime_ns) if JKM_PRICE_FILE.exists() else None)
                 if not fuel_prices.empty or not jkm_prices.empty:
-                    fuel_comparison_charts(monthly_jepx_spreads(data, area), fuel_prices, jkm_prices)
+                    fuel_comparison_charts(daily, fuel_prices, jkm_prices)
             with st.expander(f"{market} 주간 수치·일별 검증"):
                 table = history.drop(columns="used_periods") if market == "JEPX" else history
                 st.dataframe(table.rename(columns={"week": "주차 시작", "week_end": "주차 종료", "series": "지표" if market == "JEPX" else "시간조건 (30분 환산 수)", "value": "Index (엔/MW/년)", "valid_days": "집계 일수", "complete_days": "완전일 수", "average_price": "평균 스프레드 (엔/kWh)" if market == "JEPX" else "선택 평균가격 (엔/kW·30분)", "quality": "완전성", "regime": "거래제도", "expected_days": "해당 제도 일수", "segment_start": "집계 시작", "segment_end": "집계 종료", "used_periods": "사용 코마 또는 블록 수"}), hide_index=True)
