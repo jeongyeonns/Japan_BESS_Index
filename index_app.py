@@ -109,8 +109,7 @@ def fuel_comparison_charts(daily, fuel_prices, jkm_prices=None):
     st.markdown("### JEPX 스프레드와 발전연료 가격 추이 비교")
     period = st.selectbox("분석 주기", ["주별", "일별"], key="fuel_frequency")
     jepx_monthly = comparison_jepx_periods(daily, weekly=period == "주별")
-    st.caption("JEPX는 선택한 주기, 발전연료는 월별 관측가격 기준입니다.")
-    st.caption("연료가격의 X축 위치는 해당 월을 나타내며 특정 날짜의 일별 가격이 아닙니다.")
+    st.caption("※ JKM 연동가격, 일본 LNG 수입가격, 호주 발전용 석탄가격은 현재 월별 자료만 확보되어 있습니다.  \n따라서 JEPX 스프레드만 선택한 주기에 따라 표시하며, 연료가격은 월별 기준으로 제공합니다.")
     latest = fuel_prices.month.max().strftime("%Y-%m") if not fuel_prices.empty else "없음"
     jkm_latest = jkm_prices.comparison_month.max().strftime("%Y-%m") if jkm_prices is not None and not jkm_prices.empty else "없음"
     st.caption(f"World Bank Pink Sheet 최신 갱신월: {latest} · JPX JKM 최신 평가기간 종료월: {jkm_latest}")

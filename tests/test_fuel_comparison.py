@@ -37,7 +37,7 @@ def test_rendered_fuel_labels_sources_and_plotly_text(monkeypatch):
     monkeypatch.setattr(index_app.st, "selectbox", lambda *args, **kwargs: "\uc8fc\ubcc4")
     index_app.fuel_comparison_charts(daily, fuel, jkm)
     assert texts[0] == "### JEPX 스프레드와 발전연료 가격 추이 비교"
-    assert texts[1] == "JEPX\ub294 \uc120\ud0dd\ud55c \uc8fc\uae30, \ubc1c\uc804\uc5f0\ub8cc\ub294 \uc6d4\ubcc4 \uad00\uce21\uac00\uaca9 \uae30\uc900\uc785\ub2c8\ub2e4."
+    assert texts[1] == '\u203b JKM \uc5f0\ub3d9\uac00\uaca9, \uc77c\ubcf8 LNG \uc218\uc785\uac00\uaca9, \ud638\uc8fc \ubc1c\uc804\uc6a9 \uc11d\ud0c4\uac00\uaca9\uc740 \ud604\uc7ac \uc6d4\ubcc4 \uc790\ub8cc\ub9cc \ud655\ubcf4\ub418\uc5b4 \uc788\uc2b5\ub2c8\ub2e4.  \n\ub530\ub77c\uc11c JEPX \uc2a4\ud504\ub808\ub4dc\ub9cc \uc120\ud0dd\ud55c \uc8fc\uae30\uc5d0 \ub530\ub77c \ud45c\uc2dc\ud558\uba70, \uc5f0\ub8cc\uac00\uaca9\uc740 \uc6d4\ubcc4 \uae30\uc900\uc73c\ub85c \uc81c\uacf5\ud569\ub2c8\ub2e4.'
     labels = ["JKM 연동가격(JPX)", "일본 LNG 수입가격", "호주 발전용 석탄가격"]
     units = ["엔/MMBtu", "USD/MMBtu", "USD/톤"]
     assert len(figures) == 3
@@ -58,7 +58,7 @@ def test_rendered_fuel_labels_sources_and_plotly_text(monkeypatch):
     for text, label in zip(sources[1:], ["LNG Japan", "Coal Australian"]):
         assert f"[World Bank Pink Sheet ({label})](https://www.worldbank.org/en/research/commodity-markets)" in text
     assert any("평가기간 종료월을 기준으로 표시한 값입니다." in text for text in texts)
-    assert len([text for text in texts if "  \n" in text]) == 3
+    assert len([text for text in texts if "  \n" in text]) == 4
     assert all("최신 확보월" in text and "2026-10" in text for text in sources)
     assert all(fig.layout.yaxis.range == figures[0].layout.yaxis.range for fig in figures)
     columns = ["settlement_price_yen_mmbtu", "japan_lng_usd_mmbtu", "australia_coal_usd_ton"]
