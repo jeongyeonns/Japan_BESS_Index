@@ -31,11 +31,10 @@ def test_jepx_chart_display_units_preserve_values_and_eprx_axes():
         assert chart.layer[0].data.value.isna().sum() == history.value.isna().sum()
         trend(history, start, "EPRX_trend")
         eprx = render.call_args.args[0].to_dict()["layer"][0]["encoding"]
-        assert eprx["y"]["title"] == "만 엔/MW/년"
-        assert eprx["y"]["axis"]["labelExpr"] == "format(datum.value / 10000, ',.0f')"
+        assert eprx["y"]["title"] == "수익기회 Index (엔/MW/year)"
+        assert eprx["y"]["axis"]["format"] == ",.0f"
         assert eprx["x"]["axis"]["format"] == "%-m/%-d"
-        assert eprx["strokeDash"]["field"] == "regime"
-        assert eprx["strokeDash"]["legend"] is None
+        assert eprx["strokeDash"]["value"] == [1, 0]
     pd.testing.assert_frame_equal(history, original)
 
 
@@ -69,14 +68,14 @@ def test_actual_dashboard_navigation_and_missing_week():
     assert visible_text.count("**산식**") == 2
     assert "설명:" not in visible_text
     assert "제도 변경:" not in visible_text
-    assert sum(c.value.startswith("※") for c in app.caption) == 3
+    assert sum(c.value.startswith("※") for c in app.caption) == 4
     assert visible_text.count("ex)") == 2
     assert "예를 들어" not in visible_text
     assert not any(e.label in ("JEPX 지표 설명", "EPRX 지표 설명") for e in app.expander)
     assert not any(c.value == "엔/MW/년" for c in app.caption)
     assert all(m.value == "계산 불가" or m.value.endswith("만 엔/MW/year") for m in app.metric)
     assert len(app.get("vega_lite_chart")) == 3
-    assert len(app.get("plotly_chart")) == 5
+    assert len(app.get("plotly_chart")) == 4
     for area in ("Tokyo", "Chubu", "Kyushu"):
         app.selectbox[1].select(area)
         app.selectbox[0].select(pd.Timestamp("2026-11-02")).run(timeout=60)

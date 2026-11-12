@@ -47,9 +47,38 @@ def test_actual_csv_tso_column_and_panel(monkeypatch):
     texts, charts = [], []
     monkeypatch.setattr(index_app.st, "markdown", lambda t: texts.append(t))
     monkeypatch.setattr(index_app.st, "caption", lambda t: texts.append(t))
-    monkeypatch.setattr(index_app.st, "plotly_chart", lambda f, **k: charts.append(f))
-    index_app.eprx_market_panel(data, "Tokyo", pd.Timestamp("2026-04-06"), pd.Timestamp("2026-04-06"))
-    assert any("TSO 조달지역별" in t and "전원 소재지역별" in t for t in texts)
-    assert any("https://www.eprx.or.jp/information/results.php" in t for t in texts)
+    monkeypatch.setattr(index_app.st, "altair_chart", lambda f, **k: charts.append(f))
+    history, _ = index_app.weekly_results(data, "EPRX", "Tokyo", pd.Timestamp("2026-04-06"), pd.Timestamp("2026-04-06"))
+    index_app.trend(history, pd.Timestamp("2026-04-06"), "EPRX_trend", rows)
+    assert any("TSO 조달지역 기준" in t and "전원 소재지역별" in t for t in texts)
     assert all("?" not in t and "\ufffd" not in t for t in texts)
     assert len(charts) == 1
+    chart = charts[0]
+    spec = chart.to_dict()
+    assert spec["resolve"]["scale"]["y"] == "independent"
+    left = spec["layer"][0]["layer"][0]
+    right = spec["layer"][1]
+    assert right["encoding"]["y"]["axis"]["orient"] == "right"
+    assert right["encoding"]["y"]["title"] == "주간 평균 모집량 (MW)"
+    assert right["mark"]["strokeDash"] == [4, 4]
+    assert right["mark"]["point"]["shape"] == "circle"
+    assert left["encoding"]["color"] == right["encoding"]["color"]
+    assert len(right["encoding"]["color"]["scale"]["domain"]) == 5
+    assert right["encoding"]["color"]["scale"]["range"][-1] == "#808080"
+    assert chart.layer[1].data.procurement.tolist() == rows.procurement.tolist()
+    assert sorted(chart.layer[0].layer[0].data.value) == sorted(history.value)
+
+
+def test_combined_regime_and_missing_segments(monkeypatch):
+    import index_app
+    data = pd.concat([frame("2026-03-13", [2] * 8), frame("2026-03-14")], ignore_index=True).assign(procurement_volume=100, volume_unit="MW")
+    first, last = pd.Timestamp("2026-03-09"), pd.Timestamp("2026-03-23")
+    rows = weekly_market_trend(data, "Tokyo", first, last)
+    history, _ = index_app.weekly_results(data, "EPRX", "Tokyo", first, last)
+    charts = []
+    monkeypatch.setattr(index_app.st, "altair_chart", lambda chart, **k: charts.append(chart))
+    index_app.trend(history, first, "EPRX_trend", rows)
+    volume = charts[0].layer[1].data
+    assert volume.loc[volume.week.eq(first), "segment"].nunique() == 2
+    assert volume.loc[volume.week.gt(first), "procurement"].isna().all()
+    assert "EPRX 1차 조정력 주차별 시장 동향" not in open(index_app.__file__, encoding="utf-8").read()

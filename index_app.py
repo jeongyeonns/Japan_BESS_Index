@@ -7,7 +7,7 @@ import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from utils.daily_fuel_comparison import load_daily_jkm, comparison_rows, comparison_figure
-from utils.eprx_market_trend import weekly_market_trend, market_trend_figure
+from utils.eprx_market_trend import weekly_market_trend
 
 from utils.jepx_areas import JEPX_AREA_DISPLAY, JEPX_DETAIL_AREAS
 from utils.jepx_index import calculate_week_index
@@ -195,7 +195,7 @@ def weekly_results(data, market, area, first, last):
     return result, pd.concat(details, ignore_index=True)
 
 
-def trend(history, selected_week, key):
+def trend(history, selected_week, key, procurement=None):
     is_jepx = key == "JEPX_trend"
     chart_data = history.sort_values(["series", "week"]).copy()
     # Split paths at missing weeks instead of visually bridging absent values.
@@ -214,7 +214,8 @@ def trend(history, selected_week, key):
                  alt.Tooltip("complete_days:Q", title="완전일 수"), alt.Tooltip("quality:N", title="완전성")]
                 + ([] if is_jepx else [alt.Tooltip("regime:N", title="거래제도"), alt.Tooltip("segment_start:T", title="집계 시작", format="%Y-%m-%d"), alt.Tooltip("segment_end:T", title="집계 종료", format="%Y-%m-%d")]))
     if not is_jepx:
-        line = line.encode(strokeDash=alt.StrokeDash("regime:N", legend=None))
+        line = line.encode(strokeDash=alt.value([1, 0]))
+        line = line.encode(y=alt.Y("value:Q", title="수익기회 Index (엔/MW/year)", axis=alt.Axis(format=",.0f")))
     rule = alt.Chart(pd.DataFrame({"week": [selected_week]})).mark_rule(color="#94a3b8", strokeDash=[4, 4]).encode(x="week:T")
     st.caption("선택 주차는 점선이며, 정확한 금액과 데이터 집계 일수는 툴팁에서 확인할 수 있습니다.")
     chart = (line + rule).properties(height=280)
@@ -226,26 +227,30 @@ def trend(history, selected_week, key):
         reform = alt.Chart(pd.DataFrame({"date": [EPRX_REFORM_DATE], "label": ["3/14 제도 변경"]})).encode(x="date:T")
         chart = (line + rule + reform.mark_rule(color="#a66a36", strokeDash=[6, 3]) + reform.mark_text(align="left", dx=5, dy=8, baseline="top", color="#a66a36").encode(y=alt.value(0), text="label:N")).properties(height=280, title="주차별 조정력 수익기회")
         st.caption("3/14부터 3시간 블록·주간 거래가 30분 코마·전일 거래로 변경된 자료입니다. 선은 제도별로 분리되어 있으며, 전후 차이는 가격과 제도 변경의 영향을 함께 포함한 값입니다.")
+        if procurement is not None:
+            volume = procurement.sort_values(["regime", "week"]).copy()
+            volume["segment"] = volume.regime + ":" + volume.groupby("regime").procurement.transform(lambda s: s.isna().cumsum()).astype(str)
+            volume["series"] = "주간 평균 모집량 (MW)"
+            legend = alt.Legend(labelExpr="datum.label === '주간 평균 모집량 (MW)' ? datum.label : (parseInt(datum.label) / 2) + '시간 기준'")
+            scale = alt.Scale(domain=["12코마", "24코마", "36코마", "48코마", "주간 평균 모집량 (MW)"], range=["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#808080"])
+            color = alt.Color("series:N", title="지표", scale=scale, legend=legend)
+            # Keep both index rules on the left axis; resolve the volume axis separately.
+            line = line.encode(color=color)
+            left = line + rule + reform.mark_rule(color="#a66a36", strokeDash=[6, 3]) + reform.mark_text(align="left", dx=5, dy=8, baseline="top", color="#a66a36").encode(y=alt.value(0), text="label:N")
+            right = alt.Chart(volume).mark_line(strokeDash=[4, 4], point=alt.OverlayMarkDef(shape="circle")).encode(
+                x=alt.X("week:T", title="주차 시작일 (월요일)", axis=alt.Axis(format="%-m/%-d")),
+                y=alt.Y("procurement:Q", title="주간 평균 모집량 (MW)", axis=alt.Axis(orient="right", format=",.2f"), scale=alt.Scale(zero=True)),
+                color=color, detail="segment:N",
+                tooltip=[alt.Tooltip("week:T", title="주차 시작", format="%Y-%m-%d"), alt.Tooltip("procurement:Q", title="주간 평균 모집량 (MW)", format=",.4f"), alt.Tooltip("regime:N", title="거래제도"), alt.Tooltip("segment_start:T", title="집계 시작"), alt.Tooltip("segment_end:T", title="집계 종료"), alt.Tooltip("procurement_periods:Q", title="모집량 관측구간"), alt.Tooltip("expected_periods:Q", title="기대구간")])
+            chart = alt.layer(left, right).resolve_scale(y="independent").properties(height=280, title="주차별 조정력 수익기회")
     st.altair_chart(chart, width="stretch", key=key)
+    if not is_jepx and procurement is not None:
+        st.caption("※ 모집량은 TSO 조달지역 기준이며, 수익기회 Index는 전원 소재지역별 최고 낙찰가격을 기준으로 계산합니다.")
 
 
 @st.cache_data
 def cached_market_trend(data, area, first, last):
     return weekly_market_trend(data, area, first, last)
-
-
-def eprx_market_panel(data, area, first, last):
-    st.markdown("### EPRX 1차 조정력 주차별 시장 동향")
-    st.caption("모집량과 최고 낙찰가격의 변화를 함께 비교하여 시장 수급 상황과 수익기회의 관계를 살펴볼 수 있습니다.")
-    st.caption(f"{area} 열 기준: 모집량은 TSO 조달지역별, 최고 낙찰가격은 전원 소재지역별 자료로 지역 기준이 다릅니다. 지역 간 공동 조달량을 배분하거나 합산하지 않습니다.")
-    rows = cached_market_trend(data, area, first, last)
-    st.plotly_chart(market_trend_figure(rows), use_container_width=True)
-    st.caption("거래구간의 시간 길이(3시간/0.5시간)로 가중평균한 관측값입니다. 최고 낙찰가격은 낙찰량이 양수인 구간만 사용하며, 제도 전후와 3/9~15 경계 주차는 분리 집계합니다.")
-    st.caption("출처: [EPRX 1차 조정력 거래실적](https://www.eprx.or.jp/information/results.php) · 募集量（TSO別）[MW] / 最高落札価格（電源属地別）[円/kW・30分]")
-    if rows.incomplete.any():
-        st.warning("일부 주차는 관측구간 누락 또는 유효 낙찰가격 부족으로 불완전합니다. 미확보 값은 0으로 채우지 않습니다.")
-    with st.expander("모집량·가격 집계 구간 및 원자료 검증"):
-        st.dataframe(rows.rename(columns={"week":"주차 시작", "regime":"거래제도", "segment_start":"집계 시작", "segment_end":"집계 종료", "procurement":"평균 모집량 (MW)", "max_price":"평균 최고 낙찰가격 (엔/kW·30분)", "expected_periods":"기대 구간 수", "observed_periods":"관측 구간 수", "procurement_periods":"모집량 유효 구간 수", "price_periods":"가격 유효 구간 수", "duplicate_rows":"중복 제외 행 수", "procurement_hours":"모집량 관측 시간", "price_hours":"가격 관측 시간", "source_files":"원자료 파일", "incomplete":"불완전 여부"}), hide_index=True)
 
 
 def jepx_card(row, previous):
@@ -411,9 +416,8 @@ def main():
                 chart_history = history.loc[history.series.isin(choices)]
             else:
                 chart_history = history
-            trend(chart_history, week, f"{market}_trend")
-            if market == "EPRX":
-                eprx_market_panel(data, area, first, last)
+            procurement = cached_market_trend(data, area, first, last) if market == "EPRX" else None
+            trend(chart_history, week, f"{market}_trend", procurement)
             if market == "JEPX":
                 daily_fuel_panel(daily)
                 fuel_prices = load_fuel_prices((str(FUEL_PRICE_FILE), FUEL_PRICE_FILE.stat().st_mtime_ns) if FUEL_PRICE_FILE.exists() else None)
