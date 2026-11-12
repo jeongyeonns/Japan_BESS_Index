@@ -35,6 +35,7 @@ def test_jepx_chart_display_units_preserve_values_and_eprx_axes():
         assert eprx["y"]["axis"]["labelExpr"] == "format(datum.value / 10000, ',.0f')"
         assert eprx["x"]["axis"]["format"] == "%-m/%-d"
         assert eprx["strokeDash"]["field"] == "regime"
+        assert eprx["strokeDash"]["legend"] is None
     pd.testing.assert_frame_equal(history, original)
 
 
@@ -75,7 +76,7 @@ def test_actual_dashboard_navigation_and_missing_week():
     assert not any(c.value == "엔/MW/년" for c in app.caption)
     assert all(m.value == "계산 불가" or m.value.endswith("만 엔/MW/year") for m in app.metric)
     assert len(app.get("vega_lite_chart")) == 3
-    assert len(app.get("plotly_chart")) == 4
+    assert len(app.get("plotly_chart")) == 5
     for area in ("Tokyo", "Chubu", "Kyushu"):
         app.selectbox[1].select(area)
         app.selectbox[0].select(pd.Timestamp("2026-11-02")).run(timeout=60)
