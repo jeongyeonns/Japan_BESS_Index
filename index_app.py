@@ -96,11 +96,11 @@ def build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, fuel_col
             fig.data[2].hovertemplate += "<br>계약월: %{customdata[0]}<br>평가기간: %{customdata[1]}~%{customdata[2]}"
         fig.add_shape(type="line", x0="2026-02-28", x1="2026-02-28", y0=0, y1=1, yref="paper", line=dict(color="gray", dash="dot"))
         fig.add_annotation(x="2026-02-28", y=1, yref="paper", text="2/28 중동 분쟁 시작", showarrow=False)
-    fig.update_layout(height=365, margin={"l": 65, "r": 80, "t": 45, "b": 45}, legend={"orientation": "h", "y": 1.12}, hovermode="x unified")
+    fig.update_layout(height=548, margin={"l": 65, "r": 80, "t": 55, "b": 45}, legend={"orientation": "h", "y": 1.12}, hovermode="x unified")
     fig.update_xaxes(title_text="주차 시작일 (월요일)" if weekly else "날짜", tickformat="%Y-%m-%d", nticks=8)
     values = jepx_monthly.loc[jepx_monthly.month.ge(pd.Timestamp("2026-01-01")), ["tb2", "tb4"]].stack().dropna()
     limits = [min(0, float(values.min()) * 1.1), max(1, float(values.max()) * 1.1)] if not values.empty else [0, 1]
-    fig.update_yaxes(title_text="JEPX 스프레드 (엔/kWh)", secondary_y=False, range=limits, tickformat=",.2f")
+    fig.update_yaxes(title_text="JEPX 스프레드 (엔/kWh)", secondary_y=False, range=limits, tickformat=",.2f", showgrid=True)
     fuel_values = prices[fuel_column].dropna()
     if fuel_values.empty:
         fuel_limits = [0, 1]
@@ -108,7 +108,7 @@ def build_fuel_comparison_figure(jepx_monthly, fuel_prices, jkm_prices, fuel_col
         low, high = float(fuel_values.min()), float(fuel_values.max())
         padding = max((high - low) * 0.1, abs(high) * 0.05, 0.5)
         fuel_limits = [max(0, low - padding), high + padding]
-    fig.update_yaxes(title_text=fuel_unit, secondary_y=True, range=fuel_limits, tickformat=",.2f")
+    fig.update_yaxes(title_text=fuel_unit, secondary_y=True, range=fuel_limits, tickmode="sync", tickformat=",.2f", showgrid=False)
     return fig
 
 
@@ -133,7 +133,6 @@ def fuel_comparison_charts(daily, fuel_prices, jkm_prices=None):
         }
         st.caption(descriptions[column])
         st.plotly_chart(fig, use_container_width=True)
-        st.caption("※ 발전연료 가격의 변동을 쉽게 확인할 수 있도록 오른쪽 Y축 범위를 조정했습니다.")
         if column == "settlement_price_yen_mmbtu":
             st.caption(f"출처: [JEPX 스폿시장 가격](https://www.jepx.jp/electricpower/market-data/spot/) / [JPX LNG (Platts JKM) 선물 최종정산가격](https://www.jpx.co.jp/markets/derivatives/special-quotation/) · 최신 확보월(평가기간 종료월): {jkm_latest}")
         elif column == "japan_lng_usd_mmbtu":
